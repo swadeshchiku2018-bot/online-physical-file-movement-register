@@ -1552,3 +1552,28 @@ body {
   margin-top: 12px;
 }
 
+/* Recipient Management Enhancements */
+.recipient-management-grid {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 24px;
+  align-items: start;
+  width: 100%;
+}
+
+.recipient-management-card {
+  padding: 24px;
+}
+
+@media (max-width: 900px) {
+  .recipient-management-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .recipient-management-card {
+    padding: 16px;
+  }
+}
+
+

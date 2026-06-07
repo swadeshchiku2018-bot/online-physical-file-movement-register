@@ -1125,10 +1125,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* Tab 4: RECIPIENT MANAGEMENT DASHBOARD */}
       {activeTab === 'enroll_recipient' && (
         <div style={{ width: '100%' }}>
-          <div className="dashboard-split" style={{ gridTemplateColumns: '0.9fr 1.1fr', gap: '24px' }}>
+          <div className="recipient-management-grid">
             
             {/* Column 1: Add or Edit Profile Form */}
-            <div className="glass-panel" style={{ padding: '24px' }}>
+            <div className="glass-panel recipient-management-card">
               <div className="card-header" style={{ padding: '0 0 16px 0', borderBottom: '1px solid var(--border-color)', marginBottom: '20px' }}>
                 <h3>
                   {editingRecipientId ? (
@@ -1225,7 +1225,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             {/* Column 2: Directory Table */}
-            <div className="glass-panel" style={{ padding: '24px' }}>
+            <div className="glass-panel recipient-management-card">
               <div className="card-header" style={{ padding: '0 0 16px 0', borderBottom: '1px solid var(--border-color)', marginBottom: '20px' }}>
                 <h3><Users size={20} className="text-gold" /> Enrolled Recipient Directory</h3>
               </div>
@@ -1258,7 +1258,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Password: {rec.password || 'password'}</div>
                             </td>
                             <td>
-                              <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                              <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
                                 <button 
                                   className="btn btn-secondary"
                                   onClick={() => handleStartEditRecipient(rec)}
