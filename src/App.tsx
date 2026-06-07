@@ -17,7 +17,12 @@ import {
   User, 
   Clock, 
   Building,
-  ShieldAlert
+  ShieldAlert,
+  Search,
+  LogOut,
+  Lock,
+  X,
+  FileText
 } from 'lucide-react';
 import './App.css';
 
@@ -36,12 +41,19 @@ interface ToastMessage {
 
 function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'scanner'>('dashboard');
-  const [sessionUser, setSessionUser] = useState<UserSession>({
-    id: 'Admin',
-    name: 'Administrator',
-    designation: 'Record Room Head',
-    isAdmin: true
+  
+  // Auth states
+  const [sessionUser, setSessionUser] = useState<UserSession | null>(() => {
+    const saved = localStorage.getItem('gov_file_register_session');
+    return saved ? JSON.parse(saved) : null;
   });
+  const [loginRole, setLoginRole] = useState<'admin' | 'official'>('admin');
+  const [loginId, setLoginId] = useState<string>('');
+  const [loginPassword, setLoginPassword] = useState<string>('');
+
+  // Global Search states
+  const [searchModalOpen, setSearchModalOpen] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Database states
   const [filesList, setFilesList] = useState<FileItem[]>([]);
@@ -77,29 +89,177 @@ function App() {
     }, 4000);
   };
 
-  // Switch between Admin testing session and Recipient dashboard
-  const handleUserSessionChange = (userId: string) => {
-    if (userId === 'Admin') {
-      setSessionUser({
-        id: 'Admin',
-        name: 'Administrator',
-        designation: 'Record Room Head',
-        isAdmin: true
-      });
-      triggerToast('Switched to Admin Workspace');
+  // Perform login check
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginId.trim() || !loginPassword.trim()) {
+      triggerToast('Please fill in both fields.', true);
+      return;
+    }
+
+    if (loginRole === 'admin') {
+      if (loginId.trim().toLowerCase() === 'admin' && loginPassword === 'admin') {
+        const adminSession: UserSession = {
+          id: 'Admin',
+          name: 'Administrator',
+          designation: 'Record Room Head',
+          isAdmin: true
+        };
+        setSessionUser(adminSession);
+        localStorage.setItem('gov_file_register_session', JSON.stringify(adminSession));
+        triggerToast('Welcome Back, Administrator');
+        setLoginId('');
+        setLoginPassword('');
+      } else {
+        triggerToast('Invalid Admin credentials. (Hint: admin / admin)', true);
+      }
     } else {
-      const rec = recipientsList.find((r) => r.id === userId);
-      if (rec) {
-        setSessionUser({
+      // Official login search
+      const rec = recipientsList.find(r => 
+        (r.loginId && r.loginId.toLowerCase() === loginId.trim().toLowerCase()) || 
+        (r.id.toLowerCase() === loginId.trim().toLowerCase())
+      );
+
+      if (rec && (rec.password || 'password') === loginPassword) {
+        const officialSession: UserSession = {
           id: rec.id,
           name: rec.name,
           designation: rec.designation,
           isAdmin: false
-        });
-        triggerToast(`Signed in as ${rec.name} (${rec.designation})`);
+        };
+        setSessionUser(officialSession);
+        localStorage.setItem('gov_file_register_session', JSON.stringify(officialSession));
+        triggerToast(`Signed in as ${rec.name}`);
+        setLoginId('');
+        setLoginPassword('');
+      } else {
+        triggerToast('Invalid Official credentials. (Hint: priya / password)', true);
       }
     }
   };
+
+  // Perform logout
+  const handleLogout = () => {
+    setSessionUser(null);
+    localStorage.removeItem('gov_file_register_session');
+    triggerToast('Logged out successfully.');
+  };
+
+  // Check if file is overdue
+  const isFileOverdue = (file: FileItem) => {
+    return file.status === 'Issued' && 
+           file.anticipatedReturnDate && 
+           new Date() > new Date(file.anticipatedReturnDate);
+  };
+
+  // Get recipient name
+  const getHolderName = (holderId: string | null) => {
+    if (!holderId) return 'Record Room (Admin)';
+    const rec = recipientsList.find(r => r.id === holderId);
+    return rec ? `${rec.name} (${rec.designation})` : 'Unknown';
+  };
+
+  // Filter files in global search
+  const filteredSearchFiles = filesList.filter(file => 
+    file.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    file.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    file.department.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // If not logged in, render the login panel
+  if (!sessionUser) {
+    return (
+      <div className="login-screen">
+        <div className="glass-panel login-card">
+          <div className="login-header">
+            <div className="brand-icon" style={{ margin: '0 auto', width: '48px', height: '48px', fontSize: '20px' }}>F</div>
+            <h2>Ministry File Portal</h2>
+            <p>Physical File Movement Tracking System</p>
+
+            <div className="login-tabs">
+              <button 
+                className={`login-tab ${loginRole === 'admin' ? 'active' : ''}`}
+                onClick={() => { setLoginRole('admin'); setLoginId(''); setLoginPassword(''); }}
+              >
+                🔑 Administrator
+              </button>
+              <button 
+                className={`login-tab ${loginRole === 'official' ? 'active' : ''}`}
+                onClick={() => { setLoginRole('official'); setLoginId(''); setLoginPassword(''); }}
+              >
+                👤 Official / Recipient
+              </button>
+            </div>
+          </div>
+
+          <div className="login-body">
+            {/* Quick-start credentials notice box */}
+            <div className="login-info-box">
+              <h4>
+                <ShieldAlert size={14} /> Quick-Start Credentials
+              </h4>
+              {loginRole === 'admin' ? (
+                <p>Use Login ID: <strong>admin</strong> and Password: <strong>admin</strong> to access the admin register room dashboard.</p>
+              ) : (
+                <p>Use Login ID: <strong>priya</strong> or <strong>REC-001</strong> and Password: <strong>password</strong>. (Other officials: amit, rajesh, sunita).</p>
+              )}
+            </div>
+
+            <form onSubmit={handleLoginSubmit}>
+              <div className="form-group">
+                <label>Login ID / User ID</label>
+                <div style={{ position: 'relative' }}>
+                  <User size={16} style={{ position: 'absolute', left: '14px', top: '14px', color: 'var(--text-muted)' }} />
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder={loginRole === 'admin' ? "e.g. admin" : "e.g. priya"} 
+                    value={loginId}
+                    onChange={(e) => setLoginId(e.target.value)}
+                    style={{ paddingLeft: '42px' }}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '24px' }}>
+                <label>Password</label>
+                <div style={{ position: 'relative' }}>
+                  <Lock size={16} style={{ position: 'absolute', left: '14px', top: '14px', color: 'var(--text-muted)' }} />
+                  <input 
+                    type="password" 
+                    className="input-field" 
+                    placeholder="••••••••" 
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    style={{ paddingLeft: '42px' }}
+                    required
+                  />
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+                Sign In to Portal
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* Action Notification Toast Box */}
+        <div className="toast-container">
+          {toasts.map((toast) => (
+            <div 
+              key={toast.id} 
+              className={`toast ${toast.isError ? 'error' : 'success'}`}
+            >
+              <ShieldAlert size={16} />
+              <span>{toast.text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-container">
@@ -133,22 +293,19 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="user-selector">
-            <label>Testing Persona Switcher</label>
-            <select
-              className="user-select-dropdown"
-              value={sessionUser.isAdmin ? 'Admin' : sessionUser.id}
-              onChange={(e) => handleUserSessionChange(e.target.value)}
-            >
-              <option value="Admin">🔑 Administrator (Record Room)</option>
-              <optgroup label="Registered Officials">
-                {recipientsList.map((rec) => (
-                  <option key={rec.id} value={rec.id}>
-                    👤 {rec.name} ({rec.designation})
-                  </option>
-                ))}
-              </optgroup>
-            </select>
+          <div style={{ padding: '4px 8px' }}>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
+              Logged In As
+            </span>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', marginTop: '4px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+              {sessionUser.name}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--accent-gold)', marginTop: '2px' }}>
+              {sessionUser.designation}
+            </div>
+            <button className="logout-btn" onClick={handleLogout}>
+              <LogOut size={12} /> Sign Out
+            </button>
           </div>
         </div>
       </aside>
@@ -166,6 +323,11 @@ function App() {
           </div>
 
           <div className="header-meta">
+            {/* Global Search Button */}
+            <button className="header-search-btn" onClick={() => { setSearchQuery(''); setSearchModalOpen(true); }}>
+              <Search size={14} /> Search Register
+            </button>
+
             <span className={`badge-role ${sessionUser.isAdmin ? 'admin' : 'recipient'}`}>
               {sessionUser.isAdmin ? 'Admin Portal' : 'Recipient Portal'}
             </span>
@@ -224,29 +386,14 @@ function App() {
           <QrCode size={20} />
           <span>Scan QR</span>
         </button>
-        <div className="bottom-nav-item" style={{ cursor: 'default' }}>
-          <select 
-            value={sessionUser.isAdmin ? 'Admin' : sessionUser.id}
-            onChange={(e) => handleUserSessionChange(e.target.value)}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-main)',
-              fontSize: '11px',
-              fontWeight: 600,
-              maxWidth: '80px',
-              outline: 'none'
-            }}
-          >
-            <option value="Admin" style={{ background: '#0b0f19' }}>Admin</option>
-            {recipientsList.map((rec) => (
-              <option key={rec.id} value={rec.id} style={{ background: '#0b0f19' }}>
-                {rec.name.split(' ')[0]}
-              </option>
-            ))}
-          </select>
-          <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>Role</span>
-        </div>
+        <button 
+          className="bottom-nav-item"
+          onClick={handleLogout}
+          style={{ color: 'var(--accent-red)' }}
+        >
+          <LogOut size={20} />
+          <span>Sign Out</span>
+        </button>
       </nav>
 
       {/* 4. Action Notification Toast Box */}
@@ -261,6 +408,85 @@ function App() {
           </div>
         ))}
       </div>
+
+      {/* 5. Global Search Modal */}
+      {searchModalOpen && (
+        <div className="search-modal-overlay" onClick={() => setSearchModalOpen(false)}>
+          <div className="search-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="search-header-container">
+              <div className="search-input-wrapper">
+                <Search className="search-input-icon" size={20} />
+                <input 
+                  type="text" 
+                  className="search-input-field" 
+                  placeholder="Global search files by ID, Subject details, or Section department..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  autoFocus
+                />
+                <button className="search-close-btn" onClick={() => setSearchModalOpen(false)}>
+                  <X size={20} />
+                </button>
+              </div>
+              <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                Showing {filteredSearchFiles.length} of {filesList.length} files in register database
+              </div>
+            </div>
+
+            <div className="search-results-container">
+              <div className="search-results-list">
+                {filteredSearchFiles.map(file => {
+                  const overdue = isFileOverdue(file);
+                  return (
+                    <div key={file.id} className={`search-result-row ${overdue ? 'bg-overdue overdue-border' : ''}`}>
+                      <div className="search-result-info">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span className="file-id-badge">{file.id}</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{file.department}</span>
+                        </div>
+                        <h4 style={{ fontSize: '14px', fontWeight: 600, marginTop: '6px', color: 'var(--text-main)' }}>
+                          {file.subject}
+                        </h4>
+                        
+                        <div className="search-result-meta" style={{ marginTop: '6px' }}>
+                          <span>Custodian: <strong style={{ color: file.currentHolderId ? 'var(--text-main)' : 'var(--accent-gold)' }}>{getHolderName(file.currentHolderId)}</strong></span>
+                          {file.status === 'Issued' && file.anticipatedReturnDate && (
+                            <span className={overdue ? 'overdue-text' : ''}>
+                              Promises Return: {new Date(file.anticipatedReturnDate).toLocaleDateString()} {new Date(file.anticipatedReturnDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
+                        {file.status === 'Issued' && file.reason && (
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '4px' }}>
+                            Reason: "{file.reason}"
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        {overdue ? (
+                          <span className="status-pill overdue">OVERDUE</span>
+                        ) : (
+                          <span className={`status-pill ${file.status.toLowerCase().replace(' ', '')}`}>
+                            {file.status}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {filteredSearchFiles.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                    <FileText size={40} style={{ opacity: 0.15, marginBottom: '12px' }} />
+                    <p style={{ fontSize: '14px' }}>No files found matching "{searchQuery}"</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

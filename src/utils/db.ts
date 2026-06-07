@@ -6,6 +6,8 @@ export interface FileItem {
   status: 'Issued' | 'Returned' | 'In Transit';
   createdDate: string;
   lastMovedDate: string;
+  reason?: string;
+  anticipatedReturnDate?: string;
 }
 
 export interface Recipient {
@@ -13,6 +15,8 @@ export interface Recipient {
   name: string;
   designation: string;
   isRegistered: boolean; // false for temporary unregistered recipients added by Admin
+  loginId?: string;
+  password?: string;
 }
 
 export interface Movement {
@@ -26,6 +30,8 @@ export interface Movement {
   timestamp: string;
   remarks: string;
   type: 'Issue' | 'Transfer' | 'Return' | 'Receive';
+  reason?: string;
+  anticipatedReturnDate?: string;
 }
 
 const FILES_KEY = 'gov_file_register_files';
@@ -34,13 +40,13 @@ const MOVEMENTS_KEY = 'gov_file_register_movements';
 
 // Seed Recipients
 const DEFAULT_RECIPIENTS: Recipient[] = [
-  { id: 'REC-001', name: 'Priya Patel', designation: 'Section Officer', isRegistered: true },
-  { id: 'REC-002', name: 'Amit Sharma', designation: 'Under Secretary', isRegistered: true },
-  { id: 'REC-003', name: 'Rajesh Kumar', designation: 'Dealing Assistant', isRegistered: true },
-  { id: 'REC-004', name: 'Sunita Rao', designation: 'Director (Finance)', isRegistered: true },
+  { id: 'REC-001', name: 'Priya Patel', designation: 'Section Officer', isRegistered: true, loginId: 'priya', password: 'password' },
+  { id: 'REC-002', name: 'Amit Sharma', designation: 'Under Secretary', isRegistered: true, loginId: 'amit', password: 'password' },
+  { id: 'REC-003', name: 'Rajesh Kumar', designation: 'Dealing Assistant', isRegistered: true, loginId: 'rajesh', password: 'password' },
+  { id: 'REC-004', name: 'Sunita Rao', designation: 'Director (Finance)', isRegistered: true, loginId: 'sunita', password: 'password' },
 ];
 
-// Seed Files
+// Seed Files (with GOV-2026-101 set to overdue)
 const DEFAULT_FILES: FileItem[] = [
   {
     id: 'GOV-2026-101',
@@ -49,7 +55,9 @@ const DEFAULT_FILES: FileItem[] = [
     currentHolderId: 'REC-004',
     status: 'Issued',
     createdDate: '2026-06-01T10:00:00Z',
-    lastMovedDate: '2026-06-01T11:30:00Z'
+    lastMovedDate: '2026-06-01T11:30:00Z',
+    reason: 'Urgent budget review',
+    anticipatedReturnDate: '2026-06-05T12:00:00Z' // Past date (overdue)
   },
   {
     id: 'GOV-2026-102',
@@ -58,7 +66,9 @@ const DEFAULT_FILES: FileItem[] = [
     currentHolderId: 'REC-003',
     status: 'Issued',
     createdDate: '2026-06-02T14:15:00Z',
-    lastMovedDate: '2026-06-03T09:45:00Z'
+    lastMovedDate: '2026-06-03T09:45:00Z',
+    reason: 'Review supplier configurations',
+    anticipatedReturnDate: '2026-06-15T18:00:00Z' // Future date
   },
   {
     id: 'GOV-2026-103',
@@ -83,7 +93,9 @@ const DEFAULT_MOVEMENTS: Movement[] = [
     receiverName: 'Sunita Rao (Director)',
     timestamp: '2026-06-01T11:30:00Z',
     remarks: 'Approved budget draft enclosed for final clearance.',
-    type: 'Issue'
+    type: 'Issue',
+    reason: 'Urgent budget review',
+    anticipatedReturnDate: '2026-06-05T12:00:00Z'
   },
   {
     id: 'MOV-002',
@@ -107,7 +119,9 @@ const DEFAULT_MOVEMENTS: Movement[] = [
     receiverName: 'Rajesh Kumar (Dealing Assistant)',
     timestamp: '2026-06-03T09:45:00Z',
     remarks: 'Forwarding with noting details. Please compile file comments.',
-    type: 'Transfer'
+    type: 'Transfer',
+    reason: 'Review supplier configurations',
+    anticipatedReturnDate: '2026-06-15T18:00:00Z'
   },
   {
     id: 'MOV-004',
@@ -156,7 +170,9 @@ export const getRecipients = (): Recipient[] => {
 export const addRecipient = (name: string, designation: string, isRegistered = true): Recipient => {
   const recipients = getRecipients();
   const newId = `REC-${String(recipients.length + 1).padStart(3, '0')}`;
-  const newRecipient: Recipient = { id: newId, name, designation, isRegistered };
+  const loginId = name.toLowerCase().replace(/\s+/g, '');
+  const password = 'password';
+  const newRecipient: Recipient = { id: newId, name, designation, isRegistered, loginId, password };
   recipients.push(newRecipient);
   localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(recipients));
   return newRecipient;
@@ -200,7 +216,13 @@ export const getMovements = (): Movement[] => {
   );
 };
 
-export const issueFile = (fileId: string, receiverId: string, remarks: string): FileItem => {
+export const issueFile = (
+  fileId: string, 
+  receiverId: string, 
+  remarks: string,
+  reason?: string,
+  anticipatedReturnDate?: string
+): FileItem => {
   const files = getFiles();
   const fileIndex = files.findIndex(f => f.id.toLowerCase() === fileId.toLowerCase());
   if (fileIndex === -1) throw new Error('File not found.');
@@ -213,6 +235,8 @@ export const issueFile = (fileId: string, receiverId: string, remarks: string): 
   files[fileIndex].currentHolderId = receiverId;
   files[fileIndex].status = 'Issued';
   files[fileIndex].lastMovedDate = now;
+  files[fileIndex].reason = reason;
+  files[fileIndex].anticipatedReturnDate = anticipatedReturnDate;
 
   localStorage.setItem(FILES_KEY, JSON.stringify(files));
 
@@ -228,7 +252,9 @@ export const issueFile = (fileId: string, receiverId: string, remarks: string): 
     receiverName: `${receiver.name} (${receiver.designation})`,
     timestamp: now,
     remarks: remarks || 'File issued by Administrator.',
-    type: 'Issue'
+    type: 'Issue',
+    reason,
+    anticipatedReturnDate
   };
   movements.unshift(newMovement);
   localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(movements));
@@ -257,6 +283,8 @@ export const transferFile = (
   if (receiverId === 'Admin') {
     files[fileIndex].currentHolderId = null;
     files[fileIndex].status = 'Returned';
+    files[fileIndex].reason = undefined;
+    files[fileIndex].anticipatedReturnDate = undefined;
     type = 'Return';
   } else {
     const receiver = recipients.find(r => r.id === receiverId);
@@ -283,7 +311,9 @@ export const transferFile = (
     receiverName: receiverNameWithDesig,
     timestamp: now,
     remarks: remarks || (type === 'Return' ? 'File returned to Admin.' : 'File forwarded.'),
-    type
+    type,
+    reason: files[fileIndex].reason,
+    anticipatedReturnDate: files[fileIndex].anticipatedReturnDate
   };
   movements.unshift(newMovement);
   localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(movements));

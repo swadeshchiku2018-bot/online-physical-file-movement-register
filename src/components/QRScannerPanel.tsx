@@ -7,6 +7,7 @@ import {
   getFileById, 
   getFiles, 
   getRecipients, 
+  addRecipient,
   issueFile, 
   transferFile 
 } from '../utils/db';
@@ -38,6 +39,10 @@ export const QRScannerPanel: React.FC<QRScannerPanelProps> = ({
   const [isUnregistered, setIsUnregistered] = useState<boolean>(false);
   const [unregName, setUnregName] = useState<string>('');
   const [unregDesignation, setUnregDesignation] = useState<string>('');
+
+  // New Issue custom states
+  const [issueReason, setIssueReason] = useState<string>('');
+  const [issueDeadline, setIssueDeadline] = useState<string>('');
   
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
@@ -119,6 +124,8 @@ export const QRScannerPanel: React.FC<QRScannerPanelProps> = ({
       setUnregName('');
       setUnregDesignation('');
       setIsUnregistered(false);
+      setIssueReason('');
+      setIssueDeadline('');
       onActionComplete(`File "${fileId}" scanned successfully!`);
     } else {
       setActiveFile(null);
@@ -141,7 +148,6 @@ export const QRScannerPanel: React.FC<QRScannerPanelProps> = ({
           return;
         }
         // Dynamically add unregistered recipient
-        const { addRecipient } = require('../utils/db');
         const newUnreg = addRecipient(unregName, unregDesignation, false);
         receiverId = newUnreg.id;
       }
@@ -151,7 +157,18 @@ export const QRScannerPanel: React.FC<QRScannerPanelProps> = ({
         return;
       }
 
-      issueFile(activeFile.id, receiverId, remarks);
+      if (!issueReason.trim() || !issueDeadline) {
+        onActionComplete('Please specify a reason and anticipated return time.', true);
+        return;
+      }
+
+      issueFile(
+        activeFile.id, 
+        receiverId, 
+        remarks || `Issued via QR Scanner. Reason: ${issueReason.trim()}`,
+        issueReason.trim(),
+        new Date(issueDeadline).toISOString()
+      );
       refreshData();
       onActionComplete(`File "${activeFile.id}" successfully issued.`);
       
@@ -161,6 +178,8 @@ export const QRScannerPanel: React.FC<QRScannerPanelProps> = ({
       setUnregName('');
       setUnregDesignation('');
       setIsUnregistered(false);
+      setIssueReason('');
+      setIssueDeadline('');
     } catch (err: any) {
       onActionComplete(err.message || 'Failed to issue file.', true);
     }
@@ -341,6 +360,14 @@ export const QRScannerPanel: React.FC<QRScannerPanelProps> = ({
                       {new Date(activeFile.lastMovedDate).toLocaleString()}
                     </span>
                   </div>
+                  {activeFile.status === 'Issued' && activeFile.anticipatedReturnDate && (
+                    <div className="result-detail-row">
+                      <span className="result-label">Anticipated Return</span>
+                      <span className="result-value" style={{ color: new Date() > new Date(activeFile.anticipatedReturnDate) ? 'var(--accent-red)' : 'var(--text-main)' }}>
+                        {new Date(activeFile.anticipatedReturnDate).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* CONTEXTUAL ACTIONS */}
@@ -404,14 +431,37 @@ export const QRScannerPanel: React.FC<QRScannerPanelProps> = ({
                         </div>
 
                         <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label>Remarks / Instructions</label>
+                          <label>Reason for taking File</label>
+                          <input 
+                            type="text" 
+                            className="input-field"
+                            placeholder="e.g. Budget audit reviews"
+                            value={issueReason}
+                            onChange={(e) => setIssueReason(e.target.value)}
+                            required
+                          />
+                        </div>
+
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label>Anticipated Time to Return</label>
+                          <input 
+                            type="datetime-local" 
+                            className="input-field"
+                            value={issueDeadline}
+                            onChange={(e) => setIssueDeadline(e.target.value)}
+                            required
+                          />
+                        </div>
+
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label>Remarks / Instructions (Optional)</label>
                           <textarea 
                             className="input-field"
-                            rows={3}
-                            placeholder="Add remarks (e.g., File issued for processing of bids)"
+                            rows={2}
+                            placeholder="Add extra remarks"
                             value={remarks}
                             onChange={(e) => setRemarks(e.target.value)}
-                            style={{ resize: 'vertical', minHeight: '60px' }}
+                            style={{ resize: 'vertical', minHeight: '50px' }}
                           />
                         </div>
 

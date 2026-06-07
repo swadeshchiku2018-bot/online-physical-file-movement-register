@@ -19,11 +19,12 @@ import {
   Users, 
   QrCode, 
   TrendingUp, 
-  CheckCircle, 
   FileCheck, 
   Clock, 
-  FileMinus,
-  Download
+  Download,
+  ShieldAlert,
+  Send,
+  CornerUpLeft
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -62,11 +63,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [qrModalFile, setQrModalFile] = useState<FileItem | null>(null);
   const [qrModalCodeUrl, setQrModalCodeUrl] = useState<string>('');
 
+  // Issue File Modal state
+  const [issueModalFile, setIssueModalFile] = useState<FileItem | null>(null);
+  const [issueName, setIssueName] = useState<string>('');
+  const [issueDesignation, setIssueDesignation] = useState<string>('');
+  const [issueReason, setIssueReason] = useState<string>('');
+  const [issueDeadline, setIssueDeadline] = useState<string>('');
+
+  // Live timer for elapsed calculation
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 10000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Stats
   const totalFiles = filesList.length;
   const issuedFiles = filesList.filter(f => f.status === 'Issued').length;
   const returnedFiles = filesList.filter(f => f.status === 'Returned').length;
-  const inTransitFiles = filesList.filter(f => f.status === 'In Transit').length;
 
   // Generate QR Code URL when Modal opens
   useEffect(() => {
@@ -119,11 +133,94 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  // Check if file is overdue
+  const isFileOverdue = (file: FileItem) => {
+    return file.status === 'Issued' && 
+           file.anticipatedReturnDate && 
+           currentTime > new Date(file.anticipatedReturnDate);
+  };
+
   // Find holder name helper
   const getHolderName = (holderId: string | null) => {
     if (!holderId) return 'Record Room (Admin)';
     const rec = recipientsList.find(r => r.id === holderId);
     return rec ? `${rec.name} (${rec.designation})` : 'Unknown';
+  };
+
+  // Calculate elapsed time text
+  const getElapsedTimeText = (startDateStr: string) => {
+    const elapsedMs = currentTime.getTime() - new Date(startDateStr).getTime();
+    if (elapsedMs < 0) return '0m';
+    const mins = Math.floor(elapsedMs / 60000);
+    const hours = Math.floor(mins / 60);
+    const days = Math.floor(hours / 24);
+    if (days > 0) return `${days}d ${hours % 24}h`;
+    if (hours > 0) return `${hours}h ${mins % 60}m`;
+    return `${mins}m`;
+  };
+
+  // Open Issue Modal for a specific file
+  const openIssueModal = (file: FileItem) => {
+    setIssueModalFile(file);
+    setIssueName('');
+    setIssueDesignation('');
+    setIssueReason('');
+    setIssueDeadline('');
+  };
+
+  // Handle direct file issuing via modal
+  const handleIssueSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!issueModalFile) return;
+    if (!issueName.trim() || !issueDesignation.trim() || !issueReason.trim() || !issueDeadline) {
+      onActionComplete('All issue fields are required.', true);
+      return;
+    }
+
+    try {
+      // Find or create the recipient
+      const existingRec = recipientsList.find(r => 
+        r.name.toLowerCase() === issueName.trim().toLowerCase() && 
+        r.designation.toLowerCase() === issueDesignation.trim().toLowerCase()
+      );
+      
+      let finalReceiverId = '';
+      if (existingRec) {
+        finalReceiverId = existingRec.id;
+      } else {
+        const newRec = addRecipient(issueName.trim(), issueDesignation.trim(), false);
+        finalReceiverId = newRec.id;
+      }
+
+      issueFile(
+        issueModalFile.id, 
+        finalReceiverId, 
+        `Issued directly via Admin Dashboard. Reason: ${issueReason.trim()}`, 
+        issueReason.trim(), 
+        new Date(issueDeadline).toISOString()
+      );
+      
+      refreshData();
+      onActionComplete(`File "${issueModalFile.id}" successfully issued to ${issueName.trim()}`);
+      setIssueModalFile(null);
+    } catch (err: any) {
+      onActionComplete(err.message || 'Error issuing file.', true);
+    }
+  };
+
+  // Handle direct file return / recall
+  const handleDirectReturn = (fileId: string) => {
+    try {
+      // Find current holder
+      const file = filesList.find(f => f.id === fileId);
+      if (!file || !file.currentHolderId) return;
+
+      transferFile(fileId, file.currentHolderId, 'Admin', 'Force returned to Record Room by Administrator.');
+      refreshData();
+      onActionComplete(`File "${fileId}" recalled successfully.`);
+    } catch (err: any) {
+      onActionComplete(err.message || 'Error returning file.', true);
+    }
   };
 
   // Filters
@@ -143,6 +240,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const matchesFilter = historyFilterType === 'ALL' || m.type.toUpperCase() === historyFilterType;
     return matchesSearch && matchesFilter;
   });
+
+  // Pending files list
+  const pendingFiles = filesList.filter(f => f.status === 'Issued');
 
   return (
     <div className="view-container">
@@ -189,6 +289,54 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Alerts & Attention Panel */}
+      {pendingFiles.length > 0 && (
+        <div className="glass-panel alerts-section" style={{ borderRadius: 'var(--border-radius)' }}>
+          <div className="card-header" style={{ borderBottom: '1px solid rgba(251,191,36,0.2)' }}>
+            <h3 style={{ color: 'var(--accent-gold)' }}>
+              <ShieldAlert size={20} /> File Custody Alert Center
+            </h3>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              Active custody tracking & overdue enforcement
+            </span>
+          </div>
+          <div className="card-body" style={{ padding: 0 }}>
+            {pendingFiles.map(file => {
+              const overdue = isFileOverdue(file);
+              const elapsed = getElapsedTimeText(file.lastMovedDate);
+              const currentHolder = getHolderName(file.currentHolderId);
+              // Count other files pending with this official
+              const otherPendingCount = filesList.filter(f => f.currentHolderId === file.currentHolderId && f.status === 'Issued').length;
+              return (
+                <div key={file.id} className={`alert-item ${overdue ? 'bg-overdue overdue-border overdue-row' : ''}`}>
+                  <div className="alert-item-info">
+                    <span className="file-id-badge">{file.id}</span>
+                    <div>
+                      <div style={{ fontWeight: 600, color: overdue ? '#ef4444' : 'var(--text-main)' }}>
+                        {file.subject}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Custodian: <strong>{currentHolder}</strong> (holds {otherPendingCount} {otherPendingCount === 1 ? 'file' : 'files'})
+                      </div>
+                    </div>
+                  </div>
+                  <div className="alert-item-time">
+                    <div className={overdue ? 'overdue-text' : ''} style={{ fontWeight: 600 }}>
+                      Pending: {elapsed}
+                    </div>
+                    {file.anticipatedReturnDate && (
+                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Promise: {new Date(file.anticipatedReturnDate).toLocaleDateString()} {new Date(file.anticipatedReturnDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Main Split Column */}
       <div className="dashboard-split">
@@ -281,38 +429,72 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th>Department</th>
                       <th>Custodian</th>
                       <th>Status</th>
-                      <th>QR Code</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredFiles.map((file) => (
-                      <tr key={file.id}>
-                        <td style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>{file.id}</td>
-                        <td>
-                          <div style={{ fontWeight: 500 }}>{file.subject}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                            Created: {new Date(file.createdDate).toLocaleDateString()}
-                          </div>
-                        </td>
-                        <td><span style={{ fontSize: '12px', opacity: 0.85 }}>{file.department}</span></td>
-                        <td>{getHolderName(file.currentHolderId)}</td>
-                        <td>
-                          <span className={`status-pill ${file.status.toLowerCase().replace(' ', '')}`}>
-                            {file.status}
-                          </span>
-                        </td>
-                        <td>
-                          <button 
-                            className="btn btn-secondary"
-                            onClick={() => setQrModalFile(file)}
-                            style={{ width: 'auto', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '6px' }}
-                            title="Generate QR Tag"
-                          >
-                            <QrCode size={14} /> View
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredFiles.map((file) => {
+                      const overdue = isFileOverdue(file);
+                      return (
+                        <tr key={file.id} className={overdue ? 'overdue-row bg-overdue' : ''}>
+                          <td style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>{file.id}</td>
+                          <td>
+                            <div style={{ fontWeight: 500 }}>{file.subject}</div>
+                            {file.status === 'Issued' && file.anticipatedReturnDate && (
+                              <div style={{ fontSize: '11px', color: overdue ? '#ef4444' : 'var(--text-muted)', marginTop: '2px' }}>
+                                Promise Return: {new Date(file.anticipatedReturnDate).toLocaleDateString()} {new Date(file.anticipatedReturnDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            )}
+                            {file.status === 'Issued' && file.reason && (
+                              <div style={{ fontSize: '10px', color: 'var(--text-muted-dark)', fontStyle: 'italic', marginTop: '2px' }}>
+                                Reason: "{file.reason}"
+                              </div>
+                            )}
+                          </td>
+                          <td><span style={{ fontSize: '12px', opacity: 0.85 }}>{file.department}</span></td>
+                          <td>{getHolderName(file.currentHolderId)}</td>
+                          <td>
+                            {overdue ? (
+                              <span className="status-pill overdue">OVERDUE</span>
+                            ) : (
+                              <span className={`status-pill ${file.status.toLowerCase().replace(' ', '')}`}>
+                                {file.status}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button 
+                                className="btn btn-secondary"
+                                onClick={() => setQrModalFile(file)}
+                                style={{ width: 'auto', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                title="Generate QR Tag"
+                              >
+                                <QrCode size={13} /> QR
+                              </button>
+                              
+                              {file.status === 'Returned' ? (
+                                <button 
+                                  className="btn btn-accent"
+                                  onClick={() => openIssueModal(file)}
+                                  style={{ width: 'auto', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', background: 'var(--primary)', color: 'white' }}
+                                >
+                                  <Send size={13} /> Issue
+                                </button>
+                              ) : (
+                                <button 
+                                  className="btn btn-secondary"
+                                  onClick={() => handleDirectReturn(file.id)}
+                                  style={{ width: 'auto', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', borderColor: overdue ? 'rgba(239, 68, 68, 0.4)' : '', color: overdue ? '#f87171' : '' }}
+                                >
+                                  <CornerUpLeft size={13} /> Recall
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {filteredFiles.length === 0 && (
                       <tr>
                         <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
@@ -567,6 +749,108 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   Print Label
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dedicated Issue File Modal Overlay */}
+      {issueModalFile && (
+        <div className="modal-overlay" onClick={() => setIssueModalFile(null)}>
+          <div className="glass-panel modal-content" onClick={(e) => e.stopPropagation()} style={{ border: '1px solid var(--accent-gold)' }}>
+            <div className="card-header">
+              <h3>📂 Issue File to Official</h3>
+              <span className="file-id-badge">{issueModalFile.id}</span>
+            </div>
+            <div className="card-body">
+              <form onSubmit={handleIssueSubmit}>
+                <div style={{ marginBottom: '14px', fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                  Subject: <strong style={{ color: 'var(--text-main)' }}>{issueModalFile.subject}</strong>
+                </div>
+
+                {/* Quick prefill list of registered officials */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--accent-gold)', fontWeight: 600 }}>Quick Select Registered Official:</label>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                    {recipientsList.filter(r => r.isRegistered).map(r => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        className="sim-file-btn"
+                        onClick={() => {
+                          setIssueName(r.name);
+                          setIssueDesignation(r.designation);
+                        }}
+                        style={{ fontSize: '11px', padding: '4px 8px' }}
+                      >
+                        👤 {r.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Official's Full Name</label>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="e.g. Priya Patel"
+                    value={issueName}
+                    onChange={(e) => setIssueName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Designation / Post</label>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="e.g. Section Officer"
+                    value={issueDesignation}
+                    onChange={(e) => setIssueDesignation(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Reason for taking File</label>
+                  <textarea 
+                    className="input-field" 
+                    rows={2}
+                    placeholder="e.g. Budget audits review or procurement checklist validation"
+                    value={issueReason}
+                    onChange={(e) => setIssueReason(e.target.value)}
+                    required
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Anticipated Time to Return</label>
+                  <input 
+                    type="datetime-local" 
+                    className="input-field" 
+                    value={issueDeadline}
+                    onChange={(e) => setIssueDeadline(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
+                    Confirm & Issue File
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    onClick={() => setIssueModalFile(null)}
+                    style={{ flex: 1 }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

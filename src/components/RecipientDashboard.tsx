@@ -117,26 +117,46 @@ export const RecipientDashboard: React.FC<RecipientDashboardProps> = ({
               </div>
             ) : (
               <div className="file-card-grid" style={{ gridTemplateColumns: '1fr' }}>
-                {activeFiles.map((file) => (
-                  <div key={file.id} className="glass-panel file-card" style={{ background: 'rgba(255,255,255,0.01)' }}>
-                    <div className="file-card-header">
-                      <div className="file-card-title">
-                        <span className="file-id-badge">{file.id}</span>
-                        <h4>{file.subject}</h4>
+                {activeFiles.map((file) => {
+                  const overdue = file.anticipatedReturnDate ? new Date() > new Date(file.anticipatedReturnDate) : false;
+                  return (
+                    <div key={file.id} className={`glass-panel file-card ${overdue ? 'overdue' : ''}`} style={{ background: 'rgba(255,255,255,0.01)' }}>
+                      <div className="file-card-header">
+                        <div className="file-card-title">
+                          <span className="file-id-badge">{file.id}</span>
+                          <h4>{file.subject}</h4>
+                        </div>
+                        {overdue ? (
+                          <span className="status-pill overdue">OVERDUE</span>
+                        ) : (
+                          <span className="status-pill issued">In Custody</span>
+                        )}
                       </div>
-                      <span className="status-pill issued">In Custody</span>
-                    </div>
 
-                    <div className="file-card-meta">
-                      <div className="file-card-meta-row">
-                        <span>Section / Dept:</span>
-                        <strong style={{ color: 'var(--text-main)' }}>{file.department}</strong>
+                      <div className="file-card-meta">
+                        <div className="file-card-meta-row">
+                          <span>Section / Dept:</span>
+                          <strong style={{ color: 'var(--text-main)' }}>{file.department}</strong>
+                        </div>
+                        <div className="file-card-meta-row">
+                          <span>Custody Since:</span>
+                          <span>{new Date(file.lastMovedDate).toLocaleString()}</span>
+                        </div>
+                        {file.anticipatedReturnDate && (
+                          <div className="file-card-meta-row">
+                            <span>Promise Return:</span>
+                            <span className={overdue ? 'overdue-text' : ''} style={{ fontWeight: 600 }}>
+                              {new Date(file.anticipatedReturnDate).toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                        {file.reason && (
+                          <div className="file-card-meta-row" style={{ flexDirection: 'column', gap: '4px', borderTop: '1px dashed var(--border-color)', paddingTop: '8px', marginTop: '4px' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 500 }}>Reason for Issue:</span>
+                            <span style={{ color: 'var(--text-main)', fontStyle: 'italic', fontSize: '11px' }}>"{file.reason}"</span>
+                          </div>
+                        )}
                       </div>
-                      <div className="file-card-meta-row">
-                        <span>Custody Since:</span>
-                        <span>{new Date(file.lastMovedDate).toLocaleString()}</span>
-                      </div>
-                    </div>
 
                     {activeTransferFileId === file.id ? (
                       /* Forward Form inside the card */
@@ -210,7 +230,8 @@ export const RecipientDashboard: React.FC<RecipientDashboardProps> = ({
                       </div>
                     )}
                   </div>
-                ))}
+                );
+              })}
               </div>
             )}
           </div>
