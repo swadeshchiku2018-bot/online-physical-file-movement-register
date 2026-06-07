@@ -25,6 +25,7 @@ import {
   FileText,
   PlusCircle,
   UserPlus,
+  Users,
   Settings,
   Send,
   Menu
@@ -337,8 +338,8 @@ function App() {
                 className={`menu-item ${activeTab === 'enroll_recipient' ? 'active' : ''}`}
                 onClick={() => { setActiveTab('enroll_recipient'); setSidebarOpen(false); }}
               >
-                <UserPlus size={18} />
-                Enroll Official
+                <Users size={18} />
+                Manage Recipient
               </button>
               
               <button 

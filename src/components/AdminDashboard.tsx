@@ -7,7 +7,9 @@ import {
   createFile, 
   addRecipient, 
   issueFile, 
-  transferFile 
+  transferFile,
+  updateRecipient,
+  deleteRecipient
 } from '../utils/db';
 import { 
   Plus, 
@@ -69,6 +71,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [recipientDesignation, setRecipientDesignation] = useState<string>('');
   const [recipientLoginId, setRecipientLoginId] = useState<string>('');
   const [recipientPassword, setRecipientPassword] = useState<string>('');
+  const [editingRecipientId, setEditingRecipientId] = useState<string | null>(null);
 
   // Preference Settings state
   const [adminLoginId, setAdminLoginId] = useState<string>(() => localStorage.getItem('gov_file_register_admin_id') || 'admin');
@@ -164,7 +167,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  // Handle Recipient Creation with custom credentials
+  // Handle Recipient Creation or Modification
   const handleCreateRecipient = (e: React.FormEvent) => {
     e.preventDefault();
     if (!recipientName.trim() || !recipientDesignation.trim()) {
@@ -173,26 +176,73 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
 
     try {
-      const newRec = addRecipient(
-        recipientName.trim(), 
-        recipientDesignation.trim(), 
-        true,
-        recipientLoginId.trim() || undefined,
-        recipientPassword.trim() || undefined
-      );
-      refreshData();
-      
-      const credentialsInfo = `Login ID: ${newRec.loginId}, Password: ${newRec.password || 'password'}`;
-      onActionComplete(`Recipient "${newRec.name}" enrolled. Credentials -> ${credentialsInfo}`);
+      if (editingRecipientId) {
+        // Edit Mode
+        const updatedRec = updateRecipient(
+          editingRecipientId,
+          recipientName.trim(),
+          recipientDesignation.trim(),
+          recipientLoginId.trim() || undefined,
+          recipientPassword.trim() || undefined
+        );
+        refreshData();
+        onActionComplete(`Recipient profile for "${updatedRec.name}" updated successfully!`);
+        
+        // Reset state
+        setEditingRecipientId(null);
+      } else {
+        // Create Mode
+        const newRec = addRecipient(
+          recipientName.trim(), 
+          recipientDesignation.trim(), 
+          true,
+          recipientLoginId.trim() || undefined,
+          recipientPassword.trim() || undefined
+        );
+        refreshData();
+        
+        const credentialsInfo = `Login ID: ${newRec.loginId}, Password: ${newRec.password || 'password'}`;
+        onActionComplete(`Recipient "${newRec.name}" enrolled. Credentials -> ${credentialsInfo}`);
+      }
       
       // Clear inputs
       setRecipientName('');
       setRecipientDesignation('');
       setRecipientLoginId('');
       setRecipientPassword('');
-      setActiveTab('registers'); // Redirect to list
     } catch (err: any) {
-      onActionComplete(err.message || 'Error creating recipient.', true);
+      onActionComplete(err.message || 'Error saving recipient.', true);
+    }
+  };
+
+  const handleStartEditRecipient = (rec: Recipient) => {
+    setEditingRecipientId(rec.id);
+    setRecipientName(rec.name);
+    setRecipientDesignation(rec.designation);
+    setRecipientLoginId(rec.loginId || '');
+    setRecipientPassword(rec.password || '');
+  };
+
+  const handleCancelEditRecipient = () => {
+    setEditingRecipientId(null);
+    setRecipientName('');
+    setRecipientDesignation('');
+    setRecipientLoginId('');
+    setRecipientPassword('');
+  };
+
+  const handleDeleteRecipient = (id: string) => {
+    if (window.confirm("Are you sure you want to delete this recipient profile?")) {
+      try {
+        if (editingRecipientId === id) {
+          handleCancelEditRecipient();
+        }
+        deleteRecipient(id);
+        refreshData();
+        onActionComplete("Official profile deleted successfully.");
+      } catch (err: any) {
+        onActionComplete(err.message || "Error deleting recipient.", true);
+      }
     }
   };
 
@@ -1072,81 +1122,175 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* Tab 4: ENROLL OFFICIAL FORM */}
+      {/* Tab 4: RECIPIENT MANAGEMENT DASHBOARD */}
       {activeTab === 'enroll_recipient' && (
-        <div style={{ maxWidth: '650px', margin: '0 auto', width: '100%' }}>
-          <div className="glass-panel" style={{ padding: '30px' }}>
-            <div className="card-header" style={{ padding: '0 0 20px 0', borderBottom: '1px solid var(--border-color)', marginBottom: '20px' }}>
-              <h3><UserPlus size={20} className="text-gold" /> Enroll Official Profile</h3>
-            </div>
-            <div className="card-body" style={{ padding: 0 }}>
-              <form onSubmit={handleCreateRecipient}>
-                <div className="form-group">
-                  <label>Official's Full Name</label>
-                  <input 
-                    type="text" 
-                    className="input-field" 
-                    placeholder="e.g. Priya Patel" 
-                    value={recipientName}
-                    onChange={(e) => setRecipientName(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '24px' }}>
-                  <label>Designation / Post</label>
-                  <input 
-                    type="text" 
-                    className="input-field" 
-                    placeholder="e.g. Post Officer" 
-                    value={recipientDesignation}
-                    onChange={(e) => setRecipientDesignation(e.target.value)}
-                    required
-                  />
-                </div>
-
-                {/* Custom User Credentials Settings */}
-                <div style={{ padding: '20px', background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--border-color)', borderRadius: '8px', marginBottom: '24px' }}>
-                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent-gold)', textTransform: 'uppercase', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Lock size={14} /> Custom Portal Login Settings (Optional)
-                  </h4>
-                  
+        <div style={{ width: '100%' }}>
+          <div className="dashboard-split" style={{ gridTemplateColumns: '0.9fr 1.1fr', gap: '24px' }}>
+            
+            {/* Column 1: Add or Edit Profile Form */}
+            <div className="glass-panel" style={{ padding: '24px' }}>
+              <div className="card-header" style={{ padding: '0 0 16px 0', borderBottom: '1px solid var(--border-color)', marginBottom: '20px' }}>
+                <h3>
+                  {editingRecipientId ? (
+                    <>
+                      <Settings size={20} className="text-gold" /> Modify Official Profile
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus size={20} className="text-gold" /> Enroll Official Profile
+                    </>
+                  )}
+                </h3>
+              </div>
+              <div className="card-body" style={{ padding: 0 }}>
+                <form onSubmit={handleCreateRecipient}>
                   <div className="form-group">
-                    <label>Set Custom Login ID / Username</label>
-                    <div style={{ position: 'relative' }}>
-                      <User size={14} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
-                      <input 
-                        type="text" 
-                        className="input-field" 
-                        placeholder="Default: lowercase name (e.g. priya)" 
-                        value={recipientLoginId}
-                        onChange={(e) => setRecipientLoginId(e.target.value)}
-                        style={{ paddingLeft: '38px', fontSize: '13px' }}
-                      />
+                    <label>Official's Full Name</label>
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="e.g. Priya Patel" 
+                      value={recipientName}
+                      onChange={(e) => setRecipientName(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '20px' }}>
+                    <label>Designation / Post</label>
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="e.g. Section Officer" 
+                      value={recipientDesignation}
+                      onChange={(e) => setRecipientDesignation(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  {/* Custom User Credentials Settings */}
+                  <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--border-color)', borderRadius: '8px', marginBottom: '20px' }}>
+                    <h4 style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-gold)', textTransform: 'uppercase', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Lock size={13} /> Custom Portal Login Settings
+                    </h4>
+                    
+                    <div className="form-group">
+                      <label>Login ID / Username</label>
+                      <div style={{ position: 'relative' }}>
+                        <User size={14} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
+                        <input 
+                          type="text" 
+                          className="input-field" 
+                          placeholder="Default: lowercase name" 
+                          value={recipientLoginId}
+                          onChange={(e) => setRecipientLoginId(e.target.value)}
+                          style={{ paddingLeft: '38px', fontSize: '13px' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Portal Login Password</label>
+                      <div style={{ position: 'relative' }}>
+                        <Lock size={14} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
+                        <input 
+                          type="text" 
+                          className="input-field" 
+                          placeholder="Default: password" 
+                          value={recipientPassword}
+                          onChange={(e) => setRecipientPassword(e.target.value)}
+                          style={{ paddingLeft: '38px', fontSize: '13px' }}
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label>Set Custom Login Password</label>
-                    <div style={{ position: 'relative' }}>
-                      <Lock size={14} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
-                      <input 
-                        type="text" 
-                        className="input-field" 
-                        placeholder="Default: password" 
-                        value={recipientPassword}
-                        onChange={(e) => setRecipientPassword(e.target.value)}
-                        style={{ paddingLeft: '38px', fontSize: '13px' }}
-                      />
-                    </div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    {editingRecipientId && (
+                      <button 
+                        type="button" 
+                        className="btn btn-secondary" 
+                        onClick={handleCancelEditRecipient}
+                        style={{ width: 'auto', flex: 1 }}
+                      >
+                        Cancel Edit
+                      </button>
+                    )}
+                    <button type="submit" className="btn btn-primary" style={{ width: 'auto', flex: editingRecipientId ? 2 : 1 }}>
+                      {editingRecipientId ? 'Save Profile Changes' : 'Enroll Official Profile'}
+                    </button>
                   </div>
-                </div>
-
-                <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-                  <Users size={16} /> Enroll Official & Show Credentials
-                </button>
-              </form>
+                </form>
+              </div>
             </div>
+
+            {/* Column 2: Directory Table */}
+            <div className="glass-panel" style={{ padding: '24px' }}>
+              <div className="card-header" style={{ padding: '0 0 16px 0', borderBottom: '1px solid var(--border-color)', marginBottom: '20px' }}>
+                <h3><Users size={20} className="text-gold" /> Enrolled Recipient Directory</h3>
+              </div>
+              <div className="card-body" style={{ padding: 0 }}>
+                <div className="table-container" style={{ maxHeight: '450px', overflowY: 'auto' }}>
+                  <table className="data-table" style={{ fontSize: '13px' }}>
+                    <thead>
+                      <tr>
+                        <th>Recipient Details</th>
+                        <th>Credentials</th>
+                        <th style={{ textAlign: 'center' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recipientsList.map((rec) => {
+                        const holdsFileCount = filesList.filter(f => f.status === 'Issued' && f.currentHolderId === rec.id).length;
+                        return (
+                          <tr key={rec.id}>
+                            <td>
+                              <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{rec.name}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{rec.designation} ({rec.id})</div>
+                              {holdsFileCount > 0 && (
+                                <div style={{ fontSize: '10px', color: 'var(--accent-gold)', fontWeight: 500, marginTop: '2px' }}>
+                                  Holds {holdsFileCount} physical file{holdsFileCount > 1 ? 's' : ''}
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <div style={{ fontSize: '11px' }}>Username: <strong style={{ color: 'var(--accent-gold)' }}>{rec.loginId || 'n/a'}</strong></div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Password: {rec.password || 'password'}</div>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                                <button 
+                                  className="btn btn-secondary"
+                                  onClick={() => handleStartEditRecipient(rec)}
+                                  style={{ width: 'auto', padding: '6px 10px', fontSize: '11px', height: '28px' }}
+                                >
+                                  Modify
+                                </button>
+                                <button 
+                                  className="btn btn-secondary"
+                                  onClick={() => handleDeleteRecipient(rec.id)}
+                                  style={{ width: 'auto', padding: '6px 10px', fontSize: '11px', height: '28px', color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {recipientsList.length === 0 && (
+                        <tr>
+                          <td colSpan={3} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                            No recipient profiles found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       )}

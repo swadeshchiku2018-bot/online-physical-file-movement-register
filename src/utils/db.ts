@@ -333,3 +333,40 @@ export const transferFile = (
 
   return files[fileIndex];
 };
+
+export const updateRecipient = (
+  id: string,
+  name: string,
+  designation: string,
+  loginId?: string,
+  password?: string
+): Recipient => {
+  const recipients = getRecipients();
+  const index = recipients.findIndex(r => r.id === id);
+  if (index === -1) throw new Error('Recipient not found.');
+  
+  recipients[index].name = name;
+  recipients[index].designation = designation;
+  if (loginId !== undefined) recipients[index].loginId = loginId;
+  if (password !== undefined) recipients[index].password = password;
+  
+  localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(recipients));
+  return recipients[index];
+};
+
+export const deleteRecipient = (id: string): void => {
+  let recipients = getRecipients();
+  const exists = recipients.some(r => r.id === id);
+  if (!exists) throw new Error('Recipient not found.');
+  
+  // Prevent deleting if the recipient currently holds a file
+  const files = getFiles();
+  const holdsFile = files.some(f => f.status === 'Issued' && f.currentHolderId === id);
+  if (holdsFile) {
+    throw new Error('Cannot delete official because they currently hold one or more active files. Recall the files first.');
+  }
+
+  recipients = recipients.filter(r => r.id !== id);
+  localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(recipients));
+};
+
