@@ -103,11 +103,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [historySearch, setHistorySearch] = useState<string>('');
   const [historyFilterType, setHistoryFilterType] = useState<string>('ALL');
 
-  // Master Ledger Filter States
-  const [filterRecipient, setFilterRecipient] = useState<string>('');
-  const [filterDate, setFilterDate] = useState<string>('');
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [filterSection, setFilterSection] = useState<string>('');
+  // Column Filter States - File Catalog
+  const [colFileIdVal, setColFileIdVal] = useState('');
+  const [colFileIdActive, setColFileIdActive] = useState('');
+  const [colSubjectVal, setColSubjectVal] = useState('');
+  const [colSubjectActive, setColSubjectActive] = useState('');
+  const [colDeptVal, setColDeptVal] = useState('');
+  const [colDeptActive, setColDeptActive] = useState('');
+  const [colCustodianVal, setColCustodianVal] = useState('');
+  const [colCustodianActive, setColCustodianActive] = useState('');
+  const [colStatusVal, setColStatusVal] = useState('');
+  const [colStatusActive, setColStatusActive] = useState('');
+
+  // Column Filter States - Movement History
+  const [colHistTimeVal, setColHistTimeVal] = useState('');
+  const [colHistTimeActive, setColHistTimeActive] = useState('');
+  const [colHistFileVal, setColHistFileVal] = useState('');
+  const [colHistFileActive, setColHistFileActive] = useState('');
+  const [colHistFromVal, setColHistFromVal] = useState('');
+  const [colHistFromActive, setColHistFromActive] = useState('');
+  const [colHistToVal, setColHistToVal] = useState('');
+  const [colHistToActive, setColHistToActive] = useState('');
+  const [colHistActionVal, setColHistActionVal] = useState('');
+  const [colHistActionActive, setColHistActionActive] = useState('');
+  const [colHistRemarksVal, setColHistRemarksVal] = useState('');
+  const [colHistRemarksActive, setColHistRemarksActive] = useState('');
+
+  // Column Filter States - Officials
+  const [colOffIdVal, setColOffIdVal] = useState('');
+  const [colOffIdActive, setColOffIdActive] = useState('');
+  const [colOffNameVal, setColOffNameVal] = useState('');
+  const [colOffNameActive, setColOffNameActive] = useState('');
+  const [colOffDesigVal, setColOffDesigVal] = useState('');
+  const [colOffDesigActive, setColOffDesigActive] = useState('');
+  const [colOffLoginVal, setColOffLoginVal] = useState('');
+  const [colOffLoginActive, setColOffLoginActive] = useState('');
+  const [colOffStatusVal, setColOffStatusVal] = useState('');
+  const [colOffStatusActive, setColOffStatusActive] = useState('');
 
   // QR Modal state
   const [qrModalFile, setQrModalFile] = useState<FileItem | null>(null);
@@ -395,14 +427,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
-  const handleClearFilters = () => {
-    setFilterRecipient('');
-    setFilterDate('');
-    setFilterStatus('ALL');
-    setFilterSection('');
-    setFileSearch('');
-    setHistorySearch('');
-    setHistoryFilterType('ALL');
+  const handleClearColumnFilters = () => {
+    if (registerSubTab === 'files') {
+      setColFileIdVal('');
+      setColFileIdActive('');
+      setColSubjectVal('');
+      setColSubjectActive('');
+      setColDeptVal('');
+      setColDeptActive('');
+      setColCustodianVal('');
+      setColCustodianActive('');
+      setColStatusVal('');
+      setColStatusActive('');
+    } else if (registerSubTab === 'history') {
+      setColHistTimeVal('');
+      setColHistTimeActive('');
+      setColHistFileVal('');
+      setColHistFileActive('');
+      setColHistFromVal('');
+      setColHistFromActive('');
+      setColHistToVal('');
+      setColHistToActive('');
+      setColHistActionVal('');
+      setColHistActionActive('');
+      setColHistRemarksVal('');
+      setColHistRemarksActive('');
+    } else {
+      setColOffIdVal('');
+      setColOffIdActive('');
+      setColOffNameVal('');
+      setColOffNameActive('');
+      setColOffDesigVal('');
+      setColOffDesigActive('');
+      setColOffLoginVal('');
+      setColOffLoginActive('');
+      setColOffStatusVal('');
+      setColOffStatusActive('');
+    }
   };
 
   const handleExportCSV = () => {
@@ -437,7 +498,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       filename = 'Digital_File_Movement_Ledger_History.csv';
     } else {
       headers = ['Recipient ID', 'Full Name', 'Designation', 'Login ID', 'Registration Status'];
-      rows = recipientsList.map(r => [
+      rows = filteredOfficials.map(r => [
         r.id,
         r.name,
         r.designation,
@@ -469,39 +530,85 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onActionComplete(`Data exported successfully to ${filename}`);
   };
 
+  const renderColumnFilterInput = (
+    value: string, 
+    setValue: (v: string) => void, 
+    setActive: (v: string) => void, 
+    placeholder: string
+  ) => {
+    return (
+      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', minWidth: '90px' }}>
+        <input 
+          type="text" 
+          className="input-field" 
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              setActive(value);
+            }
+          }}
+          style={{ fontSize: '11px', padding: '4px 6px', height: '24px', background: 'rgba(255,255,255,0.03)', borderRadius: '4px' }}
+        />
+        <button 
+          type="button" 
+          className="btn btn-primary"
+          onClick={() => setActive(value)}
+          style={{ width: 'auto', padding: '0 6px', height: '24px', fontSize: '10px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          OK
+        </button>
+      </div>
+    );
+  };
+
   // Filters
   const filteredFiles = filesList.filter(f => {
-    const matchesSearch = f.id.toLowerCase().includes(fileSearch.toLowerCase()) ||
+    const matchesSearch = !fileSearch || 
+                          f.id.toLowerCase().includes(fileSearch.toLowerCase()) ||
                           f.subject.toLowerCase().includes(fileSearch.toLowerCase()) ||
                           f.department.toLowerCase().includes(fileSearch.toLowerCase());
     
-    const matchesRecipient = !filterRecipient || f.currentHolderId === filterRecipient;
-    const matchesStatus = filterStatus === 'ALL' || f.status === filterStatus;
-    const matchesSection = !filterSection || f.department === filterSection;
-    const matchesDate = !filterDate || (f.lastMovedDate && f.lastMovedDate.startsWith(filterDate));
+    const matchesId = !colFileIdActive || f.id.toLowerCase().includes(colFileIdActive.toLowerCase());
+    const matchesSubject = !colSubjectActive || f.subject.toLowerCase().includes(colSubjectActive.toLowerCase());
+    const matchesDept = !colDeptActive || f.department.toLowerCase().includes(colDeptActive.toLowerCase());
+    const matchesCustodian = !colCustodianActive || getHolderName(f.currentHolderId).toLowerCase().includes(colCustodianActive.toLowerCase());
+    const matchesStatus = !colStatusActive || f.status.toLowerCase().includes(colStatusActive.toLowerCase());
     
-    return matchesSearch && matchesRecipient && matchesStatus && matchesSection && matchesDate;
+    return matchesSearch && matchesId && matchesSubject && matchesDept && matchesCustodian && matchesStatus;
   });
 
   const filteredHistory = movementsList.filter(m => {
-    const matchesSearch = 
-      m.fileId.toLowerCase().includes(historySearch.toLowerCase()) ||
-      m.fileSubject.toLowerCase().includes(historySearch.toLowerCase()) ||
-      m.senderName.toLowerCase().includes(historySearch.toLowerCase()) ||
-      m.receiverName.toLowerCase().includes(historySearch.toLowerCase());
+    const matchesSearch = !historySearch || 
+                          m.fileId.toLowerCase().includes(historySearch.toLowerCase()) ||
+                          m.fileSubject.toLowerCase().includes(historySearch.toLowerCase()) ||
+                          m.senderName.toLowerCase().includes(historySearch.toLowerCase()) ||
+                          m.receiverName.toLowerCase().includes(historySearch.toLowerCase());
     
     const matchesFilter = historyFilterType === 'ALL' || m.type.toUpperCase() === historyFilterType;
     
-    const matchesRecipient = !filterRecipient || 
-                             m.senderId === filterRecipient || 
-                             m.receiverId === filterRecipient;
-                             
-    const matchesSection = !filterSection || 
-                           filesList.find(f => f.id === m.fileId)?.department === filterSection;
-                           
-    const matchesDate = !filterDate || m.timestamp.startsWith(filterDate);
+    const matchesTime = !colHistTimeActive || new Date(m.timestamp).toLocaleString().toLowerCase().includes(colHistTimeActive.toLowerCase());
+    const matchesFile = !colHistFileActive || 
+                        (m.fileId.toLowerCase().includes(colHistFileActive.toLowerCase()) || 
+                         m.fileSubject.toLowerCase().includes(colHistFileActive.toLowerCase()));
+    const matchesFrom = !colHistFromActive || m.senderName.toLowerCase().includes(colHistFromActive.toLowerCase());
+    const matchesTo = !colHistToActive || m.receiverName.toLowerCase().includes(colHistToActive.toLowerCase());
+    const matchesAction = !colHistActionActive || m.type.toLowerCase().includes(colHistActionActive.toLowerCase());
+    const matchesRemarks = !colHistRemarksActive || m.remarks.toLowerCase().includes(colHistRemarksActive.toLowerCase());
     
-    return matchesSearch && matchesFilter && matchesRecipient && matchesSection && matchesDate;
+    return matchesSearch && matchesFilter && matchesTime && matchesFile && matchesFrom && matchesTo && matchesAction && matchesRemarks;
+  });
+
+  const filteredOfficials = recipientsList.filter(r => {
+    const matchesId = !colOffIdActive || r.id.toLowerCase().includes(colOffIdActive.toLowerCase());
+    const matchesName = !colOffNameActive || r.name.toLowerCase().includes(colOffNameActive.toLowerCase());
+    const matchesDesig = !colOffDesigActive || r.designation.toLowerCase().includes(colOffDesigActive.toLowerCase());
+    const matchesLogin = !colOffLoginActive || (r.loginId || 'n/a').toLowerCase().includes(colOffLoginActive.toLowerCase());
+    const matchesStatus = !colOffStatusActive || 
+                          (r.isRegistered ? 'registered profile' : 'guest custodian').includes(colOffStatusActive.toLowerCase());
+    
+    return matchesId && matchesName && matchesDesig && matchesLogin && matchesStatus;
   });
 
   // Filter issue files search results
@@ -623,109 +730,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button 
                   className={`btn btn-secondary ${registerSubTab === 'files' ? 'active' : ''}`}
-                  onClick={() => setRegisterSubTab('files')}
+                  onClick={() => { setRegisterSubTab('files'); handleClearColumnFilters(); }}
                   style={{ width: 'auto', padding: '6px 14px', fontSize: '12px' }}
                 >
                   File Catalog
                 </button>
                 <button 
                   className={`btn btn-secondary ${registerSubTab === 'history' ? 'active' : ''}`}
-                  onClick={() => setRegisterSubTab('history')}
+                  onClick={() => { setRegisterSubTab('history'); handleClearColumnFilters(); }}
                   style={{ width: 'auto', padding: '6px 14px', fontSize: '12px' }}
                 >
                   Movement History
                 </button>
                 <button 
                   className={`btn btn-secondary ${registerSubTab === 'recipients' ? 'active' : ''}`}
-                  onClick={() => setRegisterSubTab('recipients')}
+                  onClick={() => { setRegisterSubTab('recipients'); handleClearColumnFilters(); }}
                   style={{ width: 'auto', padding: '6px 14px', fontSize: '12px' }}
                 >
                   Registered Officials
                 </button>
               </div>
-            </div>
-
-            {/* Advanced Filters Panel */}
-            <div className="ledger-filters-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Section / Department</label>
-                <select 
-                  className="input-field select-field"
-                  value={filterSection}
-                  onChange={(e) => setFilterSection(e.target.value)}
-                  style={{ fontSize: '12px', padding: '6px 10px', height: '34px' }}
-                >
-                  <option value="">All Sections</option>
-                  <option value="Establishment Section">Establishment Section</option>
-                  <option value="Finance & Accounts Branch">Finance & Accounts Branch</option>
-                  <option value="IT Infrastructure Division">IT Infrastructure Division</option>
-                  <option value="General Administration Division">General Administration Division</option>
-                  <option value="Policy & Coordination Unit">Policy & Coordination Unit</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Custodian / Recipient</label>
-                <select 
-                  className="input-field select-field"
-                  value={filterRecipient}
-                  onChange={(e) => setFilterRecipient(e.target.value)}
-                  style={{ fontSize: '12px', padding: '6px 10px', height: '34px' }}
-                >
-                  <option value="">All Officials</option>
-                  {recipientsList.map(r => (
-                    <option key={r.id} value={r.id}>{r.name} ({r.designation})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</label>
-                <select 
-                  className="input-field select-field"
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  style={{ fontSize: '12px', padding: '6px 10px', height: '34px' }}
-                >
-                  <option value="ALL">All Statuses</option>
-                  <option value="Returned">Safe in Record Room</option>
-                  <option value="Issued">Issued / Pending</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Movement Date</label>
-                <input 
-                  type="date"
-                  className="input-field"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                  style={{ fontSize: '12px', padding: '6px 10px', height: '34px' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
-                <button 
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={handleClearFilters}
-                  style={{ flex: 1, padding: '0 8px', height: '34px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-                  title="Clear all filters"
-                >
-                  Reset
-                </button>
-                <button 
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={handleExportCSV}
-                  style={{ flex: 1.3, padding: '0 8px', height: '34px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', background: 'linear-gradient(135deg, var(--primary), #059669)', color: 'white' }}
-                  title="Extract current list to CSV Excel"
-                >
-                  <Download size={13} /> Export
-                </button>
-              </div>
-
             </div>
 
             {/* Sub-Tab Controls (Searches) */}
@@ -735,7 +759,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <input 
                   type="text" 
                   className="input-field" 
-                  placeholder="Search file index by ID, subject, or department..." 
+                  placeholder="Global search file index by ID, subject, or department..." 
                   value={fileSearch}
                   onChange={(e) => setFileSearch(e.target.value)}
                   style={{ paddingLeft: '40px' }}
@@ -750,7 +774,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <input 
                     type="text" 
                     className="input-field" 
-                    placeholder="Search movement history..." 
+                    placeholder="Global search movement history logs..." 
                     value={historySearch}
                     onChange={(e) => setHistorySearch(e.target.value)}
                     style={{ paddingLeft: '40px' }}
@@ -771,6 +795,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             )}
           </div>
 
+          {/* Excel-like Status Control Bar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px', borderBottom: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.01)', gap: '12px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>
+              {registerSubTab === 'files' && `Showing ${filteredFiles.length} of ${filesList.length} files (Apply column filters below and hit OK)`}
+              {registerSubTab === 'history' && `Showing ${filteredHistory.length} of ${movementsList.length} logs (Apply column filters below and hit OK)`}
+              {registerSubTab === 'recipients' && `Showing ${filteredOfficials.length} of ${recipientsList.length} officials (Apply column filters below and hit OK)`}
+            </span>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button 
+                className="btn btn-secondary"
+                onClick={handleClearColumnFilters}
+                style={{ width: 'auto', padding: '6px 12px', height: '32px', fontSize: '12px' }}
+              >
+                Reset Column Filters
+              </button>
+              <button 
+                className="btn btn-primary"
+                onClick={handleExportCSV}
+                style={{ width: 'auto', padding: '6px 16px', height: '32px', fontSize: '12px', background: 'linear-gradient(135deg, var(--primary), #059669)', color: 'white' }}
+              >
+                <Download size={13} /> Export Current View
+              </button>
+            </div>
+          </div>
+
           <div className="card-body" style={{ padding: 0 }}>
             
             {/* View 1: Files Table */}
@@ -785,6 +834,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th>Custodian</th>
                       <th>Status</th>
                       <th>Actions</th>
+                    </tr>
+                    <tr className="filter-header-row" style={{ background: 'rgba(0,0,0,0.15)' }}>
+                      <td>{renderColumnFilterInput(colFileIdVal, setColFileIdVal, setColFileIdActive, 'Filter ID...')}</td>
+                      <td>{renderColumnFilterInput(colSubjectVal, setColSubjectVal, setColSubjectActive, 'Filter Subject...')}</td>
+                      <td>{renderColumnFilterInput(colDeptVal, setColDeptVal, setColDeptActive, 'Filter Section...')}</td>
+                      <td>{renderColumnFilterInput(colCustodianVal, setColCustodianVal, setColCustodianActive, 'Filter Custodian...')}</td>
+                      <td>{renderColumnFilterInput(colStatusVal, setColStatusVal, setColStatusActive, 'Filter Status...')}</td>
+                      <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px' }}>Column Filters</td>
                     </tr>
                   </thead>
                   <tbody>
@@ -861,7 +918,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </table>
               </div>
             )}
-
+ 
             {/* View 2: History Register Table */}
             {registerSubTab === 'history' && (
               <div className="table-container">
@@ -874,6 +931,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th>To</th>
                       <th>Action</th>
                       <th>Remarks</th>
+                    </tr>
+                    <tr className="filter-header-row" style={{ background: 'rgba(0,0,0,0.15)' }}>
+                      <td>{renderColumnFilterInput(colHistTimeVal, setColHistTimeVal, setColHistTimeActive, 'Filter Date...')}</td>
+                      <td>{renderColumnFilterInput(colHistFileVal, setColHistFileVal, setColHistFileActive, 'Filter File...')}</td>
+                      <td>{renderColumnFilterInput(colHistFromVal, setColHistFromVal, setColHistFromActive, 'Filter Sender...')}</td>
+                      <td>{renderColumnFilterInput(colHistToVal, setColHistToVal, setColHistToActive, 'Filter Receiver...')}</td>
+                      <td>{renderColumnFilterInput(colHistActionVal, setColHistActionVal, setColHistActionActive, 'Filter Action...')}</td>
+                      <td>{renderColumnFilterInput(colHistRemarksVal, setColHistRemarksVal, setColHistRemarksActive, 'Filter Remarks...')}</td>
                     </tr>
                   </thead>
                   <tbody>
@@ -914,7 +979,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </table>
               </div>
             )}
-
+ 
             {/* View 3: Recipients List */}
             {registerSubTab === 'recipients' && (
               <div className="table-container">
@@ -927,9 +992,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th>Login ID / Username</th>
                       <th>Registration Status</th>
                     </tr>
+                    <tr className="filter-header-row" style={{ background: 'rgba(0,0,0,0.15)' }}>
+                      <td>{renderColumnFilterInput(colOffIdVal, setColOffIdVal, setColOffIdActive, 'Filter ID...')}</td>
+                      <td>{renderColumnFilterInput(colOffNameVal, setColOffNameVal, setColOffNameActive, 'Filter Name...')}</td>
+                      <td>{renderColumnFilterInput(colOffDesigVal, setColOffDesigVal, setColOffDesigActive, 'Filter Post...')}</td>
+                      <td>{renderColumnFilterInput(colOffLoginVal, setColOffLoginVal, setColOffLoginActive, 'Filter Login...')}</td>
+                      <td>{renderColumnFilterInput(colOffStatusVal, setColOffStatusVal, setColOffStatusActive, 'Filter Status...')}</td>
+                    </tr>
                   </thead>
                   <tbody>
-                    {recipientsList.map((rec) => (
+                    {filteredOfficials.map((rec) => (
                       <tr key={rec.id}>
                         <td style={{ fontWeight: 600 }}>{rec.id}</td>
                         <td style={{ fontWeight: 500 }}>{rec.name}</td>
@@ -952,7 +1024,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </table>
               </div>
             )}
-
+ 
           </div>
         </div>
       )}
