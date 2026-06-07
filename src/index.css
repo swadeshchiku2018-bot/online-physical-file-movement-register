@@ -1565,6 +1565,14 @@ body {
   padding: 24px;
 }
 
+.directory-table-view {
+  display: block;
+}
+
+.directory-cards-view {
+  display: none;
+}
+
 @media (max-width: 900px) {
   .recipient-management-grid {
     grid-template-columns: 1fr;
@@ -1575,5 +1583,29 @@ body {
     padding: 16px;
   }
 }
+
+@media (max-width: 768px) {
+  .directory-table-view {
+    display: none;
+  }
+  
+  .directory-cards-view {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .recipient-form-actions {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  
+  .recipient-form-actions button {
+    width: 100% !important;
+  }
+}
+
 
 

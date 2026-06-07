@@ -1205,7 +1205,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '10px' }}>
+                  <div className="recipient-form-actions" style={{ display: 'flex', gap: '10px' }}>
                     {editingRecipientId && (
                       <button 
                         type="button" 
@@ -1230,64 +1230,130 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <h3><Users size={20} className="text-gold" /> Enrolled Recipient Directory</h3>
               </div>
               <div className="card-body" style={{ padding: 0 }}>
-                <div className="table-container" style={{ maxHeight: '450px', overflowY: 'auto' }}>
-                  <table className="data-table" style={{ fontSize: '13px' }}>
-                    <thead>
-                      <tr>
-                        <th>Recipient Details</th>
-                        <th>Credentials</th>
-                        <th style={{ textAlign: 'center' }}>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recipientsList.map((rec) => {
-                        const holdsFileCount = filesList.filter(f => f.status === 'Issued' && f.currentHolderId === rec.id).length;
-                        return (
-                          <tr key={rec.id}>
-                            <td>
-                              <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{rec.name}</div>
-                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{rec.designation} ({rec.id})</div>
-                              {holdsFileCount > 0 && (
-                                <div style={{ fontSize: '10px', color: 'var(--accent-gold)', fontWeight: 500, marginTop: '2px' }}>
-                                  Holds {holdsFileCount} physical file{holdsFileCount > 1 ? 's' : ''}
+                
+                {/* Desktop View: Table Grid */}
+                <div className="directory-table-view">
+                  <div className="table-container" style={{ maxHeight: '450px', overflowY: 'auto' }}>
+                    <table className="data-table" style={{ fontSize: '13px' }}>
+                      <thead>
+                        <tr>
+                          <th>Recipient Details</th>
+                          <th>Credentials</th>
+                          <th style={{ textAlign: 'center' }}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recipientsList.map((rec) => {
+                          const holdsFileCount = filesList.filter(f => f.status === 'Issued' && f.currentHolderId === rec.id).length;
+                          return (
+                            <tr key={rec.id}>
+                              <td>
+                                <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{rec.name}</div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{rec.designation} ({rec.id})</div>
+                                {holdsFileCount > 0 && (
+                                  <div style={{ fontSize: '10px', color: 'var(--accent-gold)', fontWeight: 500, marginTop: '2px' }}>
+                                    Holds {holdsFileCount} physical file{holdsFileCount > 1 ? 's' : ''}
+                                  </div>
+                                )}
+                              </td>
+                              <td>
+                                <div style={{ fontSize: '11px' }}>Username: <strong style={{ color: 'var(--accent-gold)' }}>{rec.loginId || 'n/a'}</strong></div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Password: {rec.password || 'password'}</div>
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                                  <button 
+                                    className="btn btn-secondary"
+                                    onClick={() => handleStartEditRecipient(rec)}
+                                    style={{ width: 'auto', padding: '6px 10px', fontSize: '11px', height: '28px' }}
+                                  >
+                                    Modify
+                                  </button>
+                                  <button 
+                                    className="btn btn-secondary"
+                                    onClick={() => handleDeleteRecipient(rec.id)}
+                                    style={{ width: 'auto', padding: '6px 10px', fontSize: '11px', height: '28px', color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+                                  >
+                                    Delete
+                                  </button>
                                 </div>
-                              )}
-                            </td>
-                            <td>
-                              <div style={{ fontSize: '11px' }}>Username: <strong style={{ color: 'var(--accent-gold)' }}>{rec.loginId || 'n/a'}</strong></div>
-                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Password: {rec.password || 'password'}</div>
-                            </td>
-                            <td>
-                              <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                                <button 
-                                  className="btn btn-secondary"
-                                  onClick={() => handleStartEditRecipient(rec)}
-                                  style={{ width: 'auto', padding: '6px 10px', fontSize: '11px', height: '28px' }}
-                                >
-                                  Modify
-                                </button>
-                                <button 
-                                  className="btn btn-secondary"
-                                  onClick={() => handleDeleteRecipient(rec.id)}
-                                  style={{ width: 'auto', padding: '6px 10px', fontSize: '11px', height: '28px', color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.2)' }}
-                                >
-                                  Delete
-                                </button>
-                              </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {recipientsList.length === 0 && (
+                          <tr>
+                            <td colSpan={3} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                              No recipient profiles found.
                             </td>
                           </tr>
-                        );
-                      })}
-                      {recipientsList.length === 0 && (
-                        <tr>
-                          <td colSpan={3} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                            No recipient profiles found.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
+
+                {/* Mobile View: Cards Grid */}
+                <div className="directory-cards-view" style={{ maxHeight: '450px', overflowY: 'auto', paddingRight: '4px' }}>
+                  {recipientsList.map((rec) => {
+                    const holdsFileCount = filesList.filter(f => f.status === 'Issued' && f.currentHolderId === rec.id).length;
+                    return (
+                      <div 
+                        key={rec.id} 
+                        style={{ 
+                          padding: '14px', 
+                          background: 'rgba(255, 255, 255, 0.02)', 
+                          border: '1px solid var(--border-color)', 
+                          borderRadius: '8px', 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          gap: '10px',
+                          marginBottom: '10px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div>
+                            <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '14px' }}>{rec.name}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{rec.designation} ({rec.id})</div>
+                          </div>
+                          {holdsFileCount > 0 && (
+                            <span style={{ fontSize: '10px', color: '#000', background: 'var(--accent-gold)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                              Holds {holdsFileCount} file{holdsFileCount > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div style={{ padding: '8px 10px', background: 'rgba(0, 0, 0, 0.15)', borderRadius: '6px', fontSize: '12px' }}>
+                          <div>Username: <strong style={{ color: 'var(--accent-gold)' }}>{rec.loginId || 'n/a'}</strong></div>
+                          <div style={{ color: 'var(--text-muted)', marginTop: '2px' }}>Password: {rec.password || 'password'}</div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button 
+                            className="btn btn-secondary"
+                            onClick={() => handleStartEditRecipient(rec)}
+                            style={{ flex: 1, padding: '6px 12px', fontSize: '11px', height: '30px', width: 'auto' }}
+                          >
+                            Modify
+                          </button>
+                          <button 
+                            className="btn btn-secondary"
+                            onClick={() => handleDeleteRecipient(rec.id)}
+                            style={{ flex: 1, padding: '6px 12px', fontSize: '11px', height: '30px', color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.2)', width: 'auto' }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {recipientsList.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                      No recipient profiles found.
+                    </div>
+                  )}
+                </div>
+
               </div>
             </div>
 
