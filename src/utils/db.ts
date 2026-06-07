@@ -149,22 +149,80 @@ const DEFAULT_MOVEMENTS: Movement[] = [
   }
 ];
 
-export const initDB = () => {
-  if (!localStorage.getItem(RECIPIENTS_KEY)) {
-    localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(DEFAULT_RECIPIENTS));
+let cachedFiles: FileItem[] = [];
+let cachedRecipients: Recipient[] = [];
+let cachedMovements: Movement[] = [];
+
+// Helper to load from localStorage cache immediately
+const loadLocalCache = () => {
+  try {
+    cachedFiles = JSON.parse(localStorage.getItem(FILES_KEY) || '[]');
+    cachedRecipients = JSON.parse(localStorage.getItem(RECIPIENTS_KEY) || '[]');
+    cachedMovements = JSON.parse(localStorage.getItem(MOVEMENTS_KEY) || '[]');
+  } catch (e) {
+    console.error("Error loading local cache:", e);
   }
-  if (!localStorage.getItem(FILES_KEY)) {
-    localStorage.setItem(FILES_KEY, JSON.stringify(DEFAULT_FILES));
+};
+
+const seedDefaultDataLocally = () => {
+  cachedRecipients = DEFAULT_RECIPIENTS;
+  cachedFiles = DEFAULT_FILES;
+  cachedMovements = DEFAULT_MOVEMENTS;
+  localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(DEFAULT_RECIPIENTS));
+  localStorage.setItem(FILES_KEY, JSON.stringify(DEFAULT_FILES));
+  localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(DEFAULT_MOVEMENTS));
+};
+
+const saveRemoteData = async (payload: { files?: FileItem[], recipients?: Recipient[], movements?: Movement[] }) => {
+  try {
+    const response = await fetch('/api/save-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) throw new Error('Save API responded with error status');
+    console.log("Database sync with Vercel KV successful!");
+  } catch (error) {
+    console.warn("Could not sync with Vercel KV. Operating locally.", error);
   }
-  if (!localStorage.getItem(MOVEMENTS_KEY)) {
-    localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(DEFAULT_MOVEMENTS));
+};
+
+export const initDB = async (onSyncComplete?: () => void) => {
+  // Load local cache immediately for fast render
+  loadLocalCache();
+
+  try {
+    const response = await fetch('/api/get-data');
+    if (!response.ok) throw new Error('Server returned error');
+    
+    const data = await response.json();
+    
+    cachedFiles = data.files || [];
+    cachedRecipients = data.recipients || [];
+    cachedMovements = data.movements || [];
+
+    // Save back to local storage cache
+    localStorage.setItem(FILES_KEY, JSON.stringify(cachedFiles));
+    localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(cachedRecipients));
+    localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(cachedMovements));
+
+    console.log("Synced remote database with Vercel KV");
+    if (onSyncComplete) onSyncComplete();
+  } catch (err) {
+    console.warn("Using offline localStorage fallback", err);
+    if (cachedRecipients.length === 0 && cachedFiles.length === 0) {
+      seedDefaultDataLocally();
+      if (onSyncComplete) onSyncComplete();
+    }
   }
 };
 
 // Recipients API
 export const getRecipients = (): Recipient[] => {
-  initDB();
-  return JSON.parse(localStorage.getItem(RECIPIENTS_KEY) || '[]');
+  if (cachedRecipients.length === 0) {
+    loadLocalCache();
+  }
+  return cachedRecipients;
 };
 
 export const addRecipient = (
@@ -174,10 +232,10 @@ export const addRecipient = (
   loginId?: string,
   password?: string
 ): Recipient => {
-  const recipients = getRecipients();
-  const newId = `REC-${String(recipients.length + 1).padStart(3, '0')}`;
+  const newId = `REC-${String(cachedRecipients.length + 1).padStart(3, '0')}`;
   const finalLoginId = loginId || name.toLowerCase().replace(/\s+/g, '');
   const finalPassword = password || 'password';
+  
   const newRecipient: Recipient = { 
     id: newId, 
     name, 
@@ -186,15 +244,60 @@ export const addRecipient = (
     loginId: finalLoginId, 
     password: finalPassword 
   };
-  recipients.push(newRecipient);
-  localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(recipients));
+  
+  cachedRecipients.push(newRecipient);
+  localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(cachedRecipients));
+  
+  // Background Sync
+  saveRemoteData({ recipients: cachedRecipients });
   return newRecipient;
+};
+
+export const updateRecipient = (
+  id: string,
+  name: string,
+  designation: string,
+  loginId?: string,
+  password?: string
+): Recipient => {
+  const index = cachedRecipients.findIndex(r => r.id === id);
+  if (index === -1) throw new Error('Recipient not found.');
+  
+  cachedRecipients[index].name = name;
+  cachedRecipients[index].designation = designation;
+  if (loginId !== undefined) cachedRecipients[index].loginId = loginId;
+  if (password !== undefined) cachedRecipients[index].password = password;
+  
+  localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(cachedRecipients));
+  
+  // Background Sync
+  saveRemoteData({ recipients: cachedRecipients });
+  return cachedRecipients[index];
+};
+
+export const deleteRecipient = (id: string): void => {
+  const exists = cachedRecipients.some(r => r.id === id);
+  if (!exists) throw new Error('Recipient not found.');
+  
+  const files = getFiles();
+  const holdsFile = files.some(f => f.status === 'Issued' && f.currentHolderId === id);
+  if (holdsFile) {
+    throw new Error('Cannot delete official because they currently hold one or more active files. Recall the files first.');
+  }
+
+  cachedRecipients = cachedRecipients.filter(r => r.id !== id);
+  localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(cachedRecipients));
+  
+  // Background Sync
+  saveRemoteData({ recipients: cachedRecipients });
 };
 
 // Files API
 export const getFiles = (): FileItem[] => {
-  initDB();
-  return JSON.parse(localStorage.getItem(FILES_KEY) || '[]');
+  if (cachedFiles.length === 0) {
+    loadLocalCache();
+  }
+  return cachedFiles;
 };
 
 export const getFileById = (id: string): FileItem | undefined => {
@@ -203,8 +306,7 @@ export const getFileById = (id: string): FileItem | undefined => {
 };
 
 export const createFile = (id: string, subject: string, department: string): FileItem => {
-  const files = getFiles();
-  if (files.some(f => f.id.toLowerCase() === id.toLowerCase())) {
+  if (cachedFiles.some(f => f.id.toLowerCase() === id.toLowerCase())) {
     throw new Error(`File ID "${id}" already exists.`);
   }
   const newFile: FileItem = {
@@ -216,15 +318,20 @@ export const createFile = (id: string, subject: string, department: string): Fil
     createdDate: new Date().toISOString(),
     lastMovedDate: new Date().toISOString()
   };
-  files.unshift(newFile); // Add to beginning
-  localStorage.setItem(FILES_KEY, JSON.stringify(files));
+  cachedFiles.unshift(newFile);
+  localStorage.setItem(FILES_KEY, JSON.stringify(cachedFiles));
+  
+  // Background Sync
+  saveRemoteData({ files: cachedFiles });
   return newFile;
 };
 
 // Movements API
 export const getMovements = (): Movement[] => {
-  initDB();
-  return JSON.parse(localStorage.getItem(MOVEMENTS_KEY) || '[]').sort(
+  if (cachedMovements.length === 0) {
+    loadLocalCache();
+  }
+  return cachedMovements.slice().sort(
     (a: Movement, b: Movement) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
 };
@@ -236,29 +343,26 @@ export const issueFile = (
   reason?: string,
   anticipatedReturnDate?: string
 ): FileItem => {
-  const files = getFiles();
-  const fileIndex = files.findIndex(f => f.id.toLowerCase() === fileId.toLowerCase());
+  const fileIndex = cachedFiles.findIndex(f => f.id.toLowerCase() === fileId.toLowerCase());
   if (fileIndex === -1) throw new Error('File not found.');
 
-  const recipients = getRecipients();
-  const receiver = recipients.find(r => r.id === receiverId);
+  const receiver = cachedRecipients.find(r => r.id === receiverId);
   if (!receiver) throw new Error('Recipient not found.');
 
   const now = new Date().toISOString();
-  files[fileIndex].currentHolderId = receiverId;
-  files[fileIndex].status = 'Issued';
-  files[fileIndex].lastMovedDate = now;
-  files[fileIndex].reason = reason;
-  files[fileIndex].anticipatedReturnDate = anticipatedReturnDate;
+  cachedFiles[fileIndex].currentHolderId = receiverId;
+  cachedFiles[fileIndex].status = 'Issued';
+  cachedFiles[fileIndex].lastMovedDate = now;
+  cachedFiles[fileIndex].reason = reason;
+  cachedFiles[fileIndex].anticipatedReturnDate = anticipatedReturnDate;
 
-  localStorage.setItem(FILES_KEY, JSON.stringify(files));
+  localStorage.setItem(FILES_KEY, JSON.stringify(cachedFiles));
 
   // Log movement
-  const movements = getMovements();
   const newMovement: Movement = {
-    id: `MOV-${String(movements.length + 1).padStart(3, '0')}`,
-    fileId: files[fileIndex].id,
-    fileSubject: files[fileIndex].subject,
+    id: `MOV-${String(cachedMovements.length + 1).padStart(3, '0')}`,
+    fileId: cachedFiles[fileIndex].id,
+    fileSubject: cachedFiles[fileIndex].subject,
     senderId: 'Admin',
     senderName: 'Administrator',
     receiverId: receiver.id,
@@ -269,10 +373,12 @@ export const issueFile = (
     reason,
     anticipatedReturnDate
   };
-  movements.unshift(newMovement);
-  localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(movements));
+  cachedMovements.unshift(newMovement);
+  localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(cachedMovements));
 
-  return files[fileIndex];
+  // Background Sync
+  saveRemoteData({ files: cachedFiles, movements: cachedMovements });
+  return cachedFiles[fileIndex];
 };
 
 export const transferFile = (
@@ -281,12 +387,10 @@ export const transferFile = (
   receiverId: string | 'Admin', 
   remarks: string
 ): FileItem => {
-  const files = getFiles();
-  const fileIndex = files.findIndex(f => f.id.toLowerCase() === fileId.toLowerCase());
+  const fileIndex = cachedFiles.findIndex(f => f.id.toLowerCase() === fileId.toLowerCase());
   if (fileIndex === -1) throw new Error('File not found.');
 
-  const recipients = getRecipients();
-  const sender = recipients.find(r => r.id === senderId);
+  const sender = cachedRecipients.find(r => r.id === senderId);
   if (!sender) throw new Error('Sender not found.');
 
   let receiverName = 'Administrator';
@@ -294,30 +398,29 @@ export const transferFile = (
   let type: 'Transfer' | 'Return' = 'Transfer';
 
   if (receiverId === 'Admin') {
-    files[fileIndex].currentHolderId = null;
-    files[fileIndex].status = 'Returned';
-    files[fileIndex].reason = undefined;
-    files[fileIndex].anticipatedReturnDate = undefined;
+    cachedFiles[fileIndex].currentHolderId = null;
+    cachedFiles[fileIndex].status = 'Returned';
+    cachedFiles[fileIndex].reason = undefined;
+    cachedFiles[fileIndex].anticipatedReturnDate = undefined;
     type = 'Return';
   } else {
-    const receiver = recipients.find(r => r.id === receiverId);
+    const receiver = cachedRecipients.find(r => r.id === receiverId);
     if (!receiver) throw new Error('Recipient not found.');
-    files[fileIndex].currentHolderId = receiverId;
-    files[fileIndex].status = 'Issued'; // Keep as issued (or active with another holder)
+    cachedFiles[fileIndex].currentHolderId = receiverId;
+    cachedFiles[fileIndex].status = 'Issued';
     receiverName = receiver.name;
     receiverNameWithDesig = `${receiver.name} (${receiver.designation})`;
   }
 
   const now = new Date().toISOString();
-  files[fileIndex].lastMovedDate = now;
-  localStorage.setItem(FILES_KEY, JSON.stringify(files));
+  cachedFiles[fileIndex].lastMovedDate = now;
+  localStorage.setItem(FILES_KEY, JSON.stringify(cachedFiles));
 
   // Log movement
-  const movements = getMovements();
   const newMovement: Movement = {
-    id: `MOV-${String(movements.length + 1).padStart(3, '0')}`,
-    fileId: files[fileIndex].id,
-    fileSubject: files[fileIndex].subject,
+    id: `MOV-${String(cachedMovements.length + 1).padStart(3, '0')}`,
+    fileId: cachedFiles[fileIndex].id,
+    fileSubject: cachedFiles[fileIndex].subject,
     senderId: sender.id,
     senderName: `${sender.name} (${sender.designation})`,
     receiverId,
@@ -325,48 +428,14 @@ export const transferFile = (
     timestamp: now,
     remarks: remarks || (type === 'Return' ? 'File returned to Admin.' : 'File forwarded.'),
     type,
-    reason: files[fileIndex].reason,
-    anticipatedReturnDate: files[fileIndex].anticipatedReturnDate
+    reason: cachedFiles[fileIndex].reason,
+    anticipatedReturnDate: cachedFiles[fileIndex].anticipatedReturnDate
   };
-  movements.unshift(newMovement);
-  localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(movements));
+  cachedMovements.unshift(newMovement);
+  localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(cachedMovements));
 
-  return files[fileIndex];
-};
-
-export const updateRecipient = (
-  id: string,
-  name: string,
-  designation: string,
-  loginId?: string,
-  password?: string
-): Recipient => {
-  const recipients = getRecipients();
-  const index = recipients.findIndex(r => r.id === id);
-  if (index === -1) throw new Error('Recipient not found.');
-  
-  recipients[index].name = name;
-  recipients[index].designation = designation;
-  if (loginId !== undefined) recipients[index].loginId = loginId;
-  if (password !== undefined) recipients[index].password = password;
-  
-  localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(recipients));
-  return recipients[index];
-};
-
-export const deleteRecipient = (id: string): void => {
-  let recipients = getRecipients();
-  const exists = recipients.some(r => r.id === id);
-  if (!exists) throw new Error('Recipient not found.');
-  
-  // Prevent deleting if the recipient currently holds a file
-  const files = getFiles();
-  const holdsFile = files.some(f => f.status === 'Issued' && f.currentHolderId === id);
-  if (holdsFile) {
-    throw new Error('Cannot delete official because they currently hold one or more active files. Recall the files first.');
-  }
-
-  recipients = recipients.filter(r => r.id !== id);
-  localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(recipients));
+  // Background Sync
+  saveRemoteData({ files: cachedFiles, movements: cachedMovements });
+  return cachedFiles[fileIndex];
 };
 

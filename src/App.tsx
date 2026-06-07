@@ -79,7 +79,9 @@ function App() {
 
   // Initialize DB and load lists
   useEffect(() => {
-    initDB();
+    initDB(() => {
+      refreshData();
+    });
     refreshData();
     
     // Live clock update
