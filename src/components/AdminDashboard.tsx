@@ -103,43 +103,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [historySearch, setHistorySearch] = useState<string>('');
   const [historyFilterType, setHistoryFilterType] = useState<string>('ALL');
 
-  // Column Filter States - File Catalog
-  const [colFileIdVal, setColFileIdVal] = useState('');
-  const [colFileIdActive, setColFileIdActive] = useState('');
-  const [colSubjectVal, setColSubjectVal] = useState('');
-  const [colSubjectActive, setColSubjectActive] = useState('');
-  const [colDeptVal, setColDeptVal] = useState('');
-  const [colDeptActive, setColDeptActive] = useState('');
-  const [colCustodianVal, setColCustodianVal] = useState('');
-  const [colCustodianActive, setColCustodianActive] = useState('');
-  const [colStatusVal, setColStatusVal] = useState('');
-  const [colStatusActive, setColStatusActive] = useState('');
-
-  // Column Filter States - Movement History
-  const [colHistTimeVal, setColHistTimeVal] = useState('');
-  const [colHistTimeActive, setColHistTimeActive] = useState('');
-  const [colHistFileVal, setColHistFileVal] = useState('');
-  const [colHistFileActive, setColHistFileActive] = useState('');
-  const [colHistFromVal, setColHistFromVal] = useState('');
-  const [colHistFromActive, setColHistFromActive] = useState('');
-  const [colHistToVal, setColHistToVal] = useState('');
-  const [colHistToActive, setColHistToActive] = useState('');
-  const [colHistActionVal, setColHistActionVal] = useState('');
-  const [colHistActionActive, setColHistActionActive] = useState('');
-  const [colHistRemarksVal, setColHistRemarksVal] = useState('');
-  const [colHistRemarksActive, setColHistRemarksActive] = useState('');
-
-  // Column Filter States - Officials
-  const [colOffIdVal, setColOffIdVal] = useState('');
-  const [colOffIdActive, setColOffIdActive] = useState('');
-  const [colOffNameVal, setColOffNameVal] = useState('');
-  const [colOffNameActive, setColOffNameActive] = useState('');
-  const [colOffDesigVal, setColOffDesigVal] = useState('');
-  const [colOffDesigActive, setColOffDesigActive] = useState('');
-  const [colOffLoginVal, setColOffLoginVal] = useState('');
-  const [colOffLoginActive, setColOffLoginActive] = useState('');
-  const [colOffStatusVal, setColOffStatusVal] = useState('');
-  const [colOffStatusActive, setColOffStatusActive] = useState('');
+  // Master Ledger Query Preset & Parameter States
+  const [activePreset, setActivePreset] = useState<'all' | 'pending' | 'safe' | 'overdue' | 'date' | 'recipient'>('all');
+  const [queryDate, setQueryDate] = useState<string>('');
+  const [queryRecipient, setQueryRecipient] = useState<string>('');
 
   // QR Modal state
   const [qrModalFile, setQrModalFile] = useState<FileItem | null>(null);
@@ -428,41 +395,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   const handleClearColumnFilters = () => {
-    if (registerSubTab === 'files') {
-      setColFileIdVal('');
-      setColFileIdActive('');
-      setColSubjectVal('');
-      setColSubjectActive('');
-      setColDeptVal('');
-      setColDeptActive('');
-      setColCustodianVal('');
-      setColCustodianActive('');
-      setColStatusVal('');
-      setColStatusActive('');
-    } else if (registerSubTab === 'history') {
-      setColHistTimeVal('');
-      setColHistTimeActive('');
-      setColHistFileVal('');
-      setColHistFileActive('');
-      setColHistFromVal('');
-      setColHistFromActive('');
-      setColHistToVal('');
-      setColHistToActive('');
-      setColHistActionVal('');
-      setColHistActionActive('');
-      setColHistRemarksVal('');
-      setColHistRemarksActive('');
-    } else {
-      setColOffIdVal('');
-      setColOffIdActive('');
-      setColOffNameVal('');
-      setColOffNameActive('');
-      setColOffDesigVal('');
-      setColOffDesigActive('');
-      setColOffLoginVal('');
-      setColOffLoginActive('');
-      setColOffStatusVal('');
-      setColOffStatusActive('');
+    setActivePreset('all');
+    setQueryDate('');
+    setQueryRecipient('');
+    setFileSearch('');
+    setHistorySearch('');
+    setHistoryFilterType('ALL');
+  };
+
+  const handleApplyPreset = (preset: 'all' | 'pending' | 'safe' | 'overdue' | 'date' | 'recipient') => {
+    setActivePreset(preset);
+    if (preset === 'date') {
+      setRegisterSubTab('history'); // Automatically switch tab to see movement history on selected date
+    } else if (preset === 'recipient' || preset === 'pending' || preset === 'safe' || preset === 'overdue') {
+      setRegisterSubTab('files'); // Switch tab to file catalog
     }
   };
 
@@ -483,7 +429,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         f.anticipatedReturnDate ? new Date(f.anticipatedReturnDate).toLocaleString() : 'N/A',
         f.reason || 'N/A'
       ]);
-      filename = 'Digital_File_Movement_Ledger_Catalog.csv';
+      filename = `Digital_File_Movement_${activePreset}_Files.csv`;
     } else if (registerSubTab === 'history') {
       headers = ['Action Time', 'File ID', 'Subject', 'From (Sender)', 'To (Receiver)', 'Action Type', 'Remarks'];
       rows = filteredHistory.map(m => [
@@ -495,7 +441,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         m.type,
         m.remarks
       ]);
-      filename = 'Digital_File_Movement_Ledger_History.csv';
+      filename = `Digital_File_Movement_History_${queryDate || 'all'}.csv`;
     } else {
       headers = ['Recipient ID', 'Full Name', 'Designation', 'Login ID', 'Registration Status'];
       rows = filteredOfficials.map(r => [
@@ -530,53 +476,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onActionComplete(`Data exported successfully to ${filename}`);
   };
 
-  const renderColumnFilterInput = (
-    value: string, 
-    setValue: (v: string) => void, 
-    setActive: (v: string) => void, 
-    placeholder: string
-  ) => {
-    return (
-      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', minWidth: '90px' }}>
-        <input 
-          type="text" 
-          className="input-field" 
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              setActive(value);
-            }
-          }}
-          style={{ fontSize: '11px', padding: '4px 6px', height: '24px', background: 'rgba(255,255,255,0.03)', borderRadius: '4px' }}
-        />
-        <button 
-          type="button" 
-          className="btn btn-primary"
-          onClick={() => setActive(value)}
-          style={{ width: 'auto', padding: '0 6px', height: '24px', fontSize: '10px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          OK
-        </button>
-      </div>
-    );
-  };
-
   // Filters
   const filteredFiles = filesList.filter(f => {
+    // Apply global text search
     const matchesSearch = !fileSearch || 
                           f.id.toLowerCase().includes(fileSearch.toLowerCase()) ||
                           f.subject.toLowerCase().includes(fileSearch.toLowerCase()) ||
                           f.department.toLowerCase().includes(fileSearch.toLowerCase());
     
-    const matchesId = !colFileIdActive || f.id.toLowerCase().includes(colFileIdActive.toLowerCase());
-    const matchesSubject = !colSubjectActive || f.subject.toLowerCase().includes(colSubjectActive.toLowerCase());
-    const matchesDept = !colDeptActive || f.department.toLowerCase().includes(colDeptActive.toLowerCase());
-    const matchesCustodian = !colCustodianActive || getHolderName(f.currentHolderId).toLowerCase().includes(colCustodianActive.toLowerCase());
-    const matchesStatus = !colStatusActive || f.status.toLowerCase().includes(colStatusActive.toLowerCase());
+    if (!matchesSearch) return false;
     
-    return matchesSearch && matchesId && matchesSubject && matchesDept && matchesCustodian && matchesStatus;
+    // Apply Presets
+    if (activePreset === 'pending') {
+      return f.status === 'Issued';
+    }
+    if (activePreset === 'safe') {
+      return f.status === 'Returned';
+    }
+    if (activePreset === 'overdue') {
+      return isFileOverdue(f);
+    }
+    if (activePreset === 'recipient') {
+      return !queryRecipient || f.currentHolderId === queryRecipient;
+    }
+    if (activePreset === 'date') {
+      return !queryDate || (f.lastMovedDate && f.lastMovedDate.startsWith(queryDate));
+    }
+    
+    return true;
   });
 
   const filteredHistory = movementsList.filter(m => {
@@ -586,29 +513,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           m.senderName.toLowerCase().includes(historySearch.toLowerCase()) ||
                           m.receiverName.toLowerCase().includes(historySearch.toLowerCase());
     
+    if (!matchesSearch) return false;
+    
     const matchesFilter = historyFilterType === 'ALL' || m.type.toUpperCase() === historyFilterType;
+    if (!matchesFilter) return false;
     
-    const matchesTime = !colHistTimeActive || new Date(m.timestamp).toLocaleString().toLowerCase().includes(colHistTimeActive.toLowerCase());
-    const matchesFile = !colHistFileActive || 
-                        (m.fileId.toLowerCase().includes(colHistFileActive.toLowerCase()) || 
-                         m.fileSubject.toLowerCase().includes(colHistFileActive.toLowerCase()));
-    const matchesFrom = !colHistFromActive || m.senderName.toLowerCase().includes(colHistFromActive.toLowerCase());
-    const matchesTo = !colHistToActive || m.receiverName.toLowerCase().includes(colHistToActive.toLowerCase());
-    const matchesAction = !colHistActionActive || m.type.toLowerCase().includes(colHistActionActive.toLowerCase());
-    const matchesRemarks = !colHistRemarksActive || m.remarks.toLowerCase().includes(colHistRemarksActive.toLowerCase());
+    // Apply Presets
+    if (activePreset === 'date') {
+      return !queryDate || m.timestamp.startsWith(queryDate);
+    }
+    if (activePreset === 'recipient') {
+      return !queryRecipient || m.senderId === queryRecipient || m.receiverId === queryRecipient;
+    }
     
-    return matchesSearch && matchesFilter && matchesTime && matchesFile && matchesFrom && matchesTo && matchesAction && matchesRemarks;
+    return true;
   });
 
   const filteredOfficials = recipientsList.filter(r => {
-    const matchesId = !colOffIdActive || r.id.toLowerCase().includes(colOffIdActive.toLowerCase());
-    const matchesName = !colOffNameActive || r.name.toLowerCase().includes(colOffNameActive.toLowerCase());
-    const matchesDesig = !colOffDesigActive || r.designation.toLowerCase().includes(colOffDesigActive.toLowerCase());
-    const matchesLogin = !colOffLoginActive || (r.loginId || 'n/a').toLowerCase().includes(colOffLoginActive.toLowerCase());
-    const matchesStatus = !colOffStatusActive || 
-                          (r.isRegistered ? 'registered profile' : 'guest custodian').includes(colOffStatusActive.toLowerCase());
-    
-    return matchesId && matchesName && matchesDesig && matchesLogin && matchesStatus;
+    if (activePreset === 'recipient') {
+      return !queryRecipient || r.id === queryRecipient;
+    }
+    return true;
   });
 
   // Filter issue files search results
@@ -723,11 +648,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {activeTab === 'registers' && (
         <div className="glass-panel">
           <div className="card-header" style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'stretch' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="ledger-header-top">
               <h3 style={{ fontSize: '18px' }}><FileText size={20} className="text-gold" /> Master Ledger Catalog</h3>
               
               {/* Internal Tab switcher */}
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div className="ledger-subtabs">
                 <button 
                   className={`btn btn-secondary ${registerSubTab === 'files' ? 'active' : ''}`}
                   onClick={() => { setRegisterSubTab('files'); handleClearColumnFilters(); }}
@@ -793,14 +718,95 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </select>
               </div>
             )}
+
+            {/* Query Preset & Report Builder Panel */}
+            <div className="ledger-query-panel">
+              {/* Card 1: Quick Presets */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', fontWeight: 600 }}>Quick Preset Reports</span>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button 
+                    type="button"
+                    className={`btn btn-secondary ${activePreset === 'all' ? 'active' : ''}`}
+                    onClick={() => handleApplyPreset('all')}
+                    style={{ width: 'auto', padding: '6px 12px', fontSize: '11px', height: '32px' }}
+                  >
+                    All Records
+                  </button>
+                  <button 
+                    type="button"
+                    className={`btn btn-secondary ${activePreset === 'pending' ? 'active' : ''}`}
+                    onClick={() => handleApplyPreset('pending')}
+                    style={{ width: 'auto', padding: '6px 12px', fontSize: '11px', height: '32px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Clock size={12} className="text-gold" /> Pending with Officials
+                  </button>
+                  <button 
+                    type="button"
+                    className={`btn btn-secondary ${activePreset === 'safe' ? 'active' : ''}`}
+                    onClick={() => handleApplyPreset('safe')}
+                    style={{ width: 'auto', padding: '6px 12px', fontSize: '11px', height: '32px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <CheckCircle size={12} style={{ color: '#10b981' }} /> Safe in Record Room
+                  </button>
+                  <button 
+                    type="button"
+                    className={`btn btn-secondary ${activePreset === 'overdue' ? 'active' : ''}`}
+                    onClick={() => handleApplyPreset('overdue')}
+                    style={{ width: 'auto', padding: '6px 12px', fontSize: '11px', height: '32px', display: 'flex', alignItems: 'center', gap: '6px', borderColor: activePreset === 'overdue' ? '#ef4444' : '', color: activePreset === 'overdue' ? '#f87171' : '' }}
+                  >
+                    <ShieldAlert size={12} style={{ color: '#ef4444' }} /> Overdue Alerts
+                  </button>
+                </div>
+              </div>
+
+              {/* Card 2: Custom Parameter Filters */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Query by Date (Logs)</span>
+                  <input 
+                    type="date"
+                    className="input-field"
+                    value={queryDate}
+                    onChange={(e) => {
+                      setQueryDate(e.target.value);
+                      if (e.target.value) {
+                        handleApplyPreset('date');
+                      }
+                    }}
+                    style={{ height: '32px', padding: '0 8px', fontSize: '12px', background: 'rgba(255, 255, 255, 0.03)' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Query by Custodian</span>
+                  <select
+                    className="input-field select-field"
+                    value={queryRecipient}
+                    onChange={(e) => {
+                      setQueryRecipient(e.target.value);
+                      if (e.target.value) {
+                        handleApplyPreset('recipient');
+                      }
+                    }}
+                    style={{ height: '32px', padding: '0 8px', fontSize: '12px', background: 'rgba(255, 255, 255, 0.03)' }}
+                  >
+                    <option value="">All Custodians</option>
+                    <option value="Admin">Record Room (Admin)</option>
+                    {recipientsList.map(r => (
+                      <option key={r.id} value={r.id}>{r.name} ({r.designation})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Excel-like Status Control Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px', borderBottom: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.01)', gap: '12px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>
-              {registerSubTab === 'files' && `Showing ${filteredFiles.length} of ${filesList.length} files (Apply column filters below and hit OK)`}
-              {registerSubTab === 'history' && `Showing ${filteredHistory.length} of ${movementsList.length} logs (Apply column filters below and hit OK)`}
-              {registerSubTab === 'recipients' && `Showing ${filteredOfficials.length} of ${recipientsList.length} officials (Apply column filters below and hit OK)`}
+              {registerSubTab === 'files' && `Showing ${filteredFiles.length} of ${filesList.length} files (Preset Report: ${activePreset.toUpperCase()})`}
+              {registerSubTab === 'history' && `Showing ${filteredHistory.length} of ${movementsList.length} logs (Preset Report: ${activePreset.toUpperCase()})`}
+              {registerSubTab === 'recipients' && `Showing ${filteredOfficials.length} of ${recipientsList.length} officials (Preset Report: ${activePreset.toUpperCase()})`}
             </span>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button 
@@ -808,7 +814,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 onClick={handleClearColumnFilters}
                 style={{ width: 'auto', padding: '6px 12px', height: '32px', fontSize: '12px' }}
               >
-                Reset Column Filters
+                Reset Filters
               </button>
               <button 
                 className="btn btn-primary"
@@ -834,14 +840,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th>Custodian</th>
                       <th>Status</th>
                       <th>Actions</th>
-                    </tr>
-                    <tr className="filter-header-row" style={{ background: 'rgba(0,0,0,0.15)' }}>
-                      <td>{renderColumnFilterInput(colFileIdVal, setColFileIdVal, setColFileIdActive, 'Filter ID...')}</td>
-                      <td>{renderColumnFilterInput(colSubjectVal, setColSubjectVal, setColSubjectActive, 'Filter Subject...')}</td>
-                      <td>{renderColumnFilterInput(colDeptVal, setColDeptVal, setColDeptActive, 'Filter Section...')}</td>
-                      <td>{renderColumnFilterInput(colCustodianVal, setColCustodianVal, setColCustodianActive, 'Filter Custodian...')}</td>
-                      <td>{renderColumnFilterInput(colStatusVal, setColStatusVal, setColStatusActive, 'Filter Status...')}</td>
-                      <td style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '11px' }}>Column Filters</td>
                     </tr>
                   </thead>
                   <tbody>
@@ -932,14 +930,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th>Action</th>
                       <th>Remarks</th>
                     </tr>
-                    <tr className="filter-header-row" style={{ background: 'rgba(0,0,0,0.15)' }}>
-                      <td>{renderColumnFilterInput(colHistTimeVal, setColHistTimeVal, setColHistTimeActive, 'Filter Date...')}</td>
-                      <td>{renderColumnFilterInput(colHistFileVal, setColHistFileVal, setColHistFileActive, 'Filter File...')}</td>
-                      <td>{renderColumnFilterInput(colHistFromVal, setColHistFromVal, setColHistFromActive, 'Filter Sender...')}</td>
-                      <td>{renderColumnFilterInput(colHistToVal, setColHistToVal, setColHistToActive, 'Filter Receiver...')}</td>
-                      <td>{renderColumnFilterInput(colHistActionVal, setColHistActionVal, setColHistActionActive, 'Filter Action...')}</td>
-                      <td>{renderColumnFilterInput(colHistRemarksVal, setColHistRemarksVal, setColHistRemarksActive, 'Filter Remarks...')}</td>
-                    </tr>
                   </thead>
                   <tbody>
                     {filteredHistory.map((movement) => (
@@ -991,13 +981,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th>Designation</th>
                       <th>Login ID / Username</th>
                       <th>Registration Status</th>
-                    </tr>
-                    <tr className="filter-header-row" style={{ background: 'rgba(0,0,0,0.15)' }}>
-                      <td>{renderColumnFilterInput(colOffIdVal, setColOffIdVal, setColOffIdActive, 'Filter ID...')}</td>
-                      <td>{renderColumnFilterInput(colOffNameVal, setColOffNameVal, setColOffNameActive, 'Filter Name...')}</td>
-                      <td>{renderColumnFilterInput(colOffDesigVal, setColOffDesigVal, setColOffDesigActive, 'Filter Post...')}</td>
-                      <td>{renderColumnFilterInput(colOffLoginVal, setColOffLoginVal, setColOffLoginActive, 'Filter Login...')}</td>
-                      <td>{renderColumnFilterInput(colOffStatusVal, setColOffStatusVal, setColOffStatusActive, 'Filter Status...')}</td>
                     </tr>
                   </thead>
                   <tbody>
