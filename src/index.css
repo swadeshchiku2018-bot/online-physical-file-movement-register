@@ -841,12 +841,93 @@ body {
   color: var(--accent-gold);
 }
 
+/* Sidebar Overlay and Drawer Mobile controls */
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(2, 6, 23, 0.75);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1050;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-normal);
+}
+
+.sidebar-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mobile-menu-toggle {
+  display: none;
+}
+
+.sidebar-close-btn {
+  display: none;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .sidebar {
-    display: none; /* Hide sidebar on tablet/mobile */
+    display: flex;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
+    z-index: 1100;
+    transform: translateX(-100%);
+    transition: transform var(--transition-normal);
+    background: #0c121f;
+    border-right: 1px solid var(--border-color);
+    box-shadow: 5px 0 25px rgba(0, 0, 0, 0.5);
   }
   
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .mobile-menu-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    margin-right: 12px;
+    transition: background var(--transition-fast);
+  }
+
+  .mobile-menu-toggle:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .sidebar-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 4px;
+    margin-left: auto;
+    transition: all var(--transition-fast);
+  }
+
+  .sidebar-close-btn:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.05);
+  }
+
   .bottom-nav {
     display: flex; /* Show bottom nav on tablet/mobile */
   }
@@ -871,6 +952,34 @@ body {
   
   .stats-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .data-table {
+    min-width: 750px;
+  }
+}
+
+@media (max-width: 600px) {
+  .search-result-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .alert-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .alert-item-time {
+    text-align: left;
+    width: 100%;
   }
 }
 

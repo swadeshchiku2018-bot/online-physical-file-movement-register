@@ -26,7 +26,8 @@ import {
   PlusCircle,
   UserPlus,
   Settings,
-  Send
+  Send,
+  Menu
 } from 'lucide-react';
 import './App.css';
 
@@ -46,6 +47,7 @@ interface ToastMessage {
 function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'registers' | 'register_file' | 'enroll_recipient' | 'alerts' | 'scanner' | 'settings' | 'issue_file'>('dashboard');
   const [orgName, setOrgName] = useState<string>(() => localStorage.getItem('gov_file_register_org_name') || 'Govt of India • Ministry of Electronics & IT');
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   
   // Auth states
   const [sessionUser, setSessionUser] = useState<UserSession | null>(() => {
@@ -271,14 +273,22 @@ function App() {
   return (
     <div className="app-container">
       
-      {/* 1. Desktop Sidebar Navigation */}
-      <aside className="sidebar">
+      {/* 1. Mobile Sidebar Navigation Drawer Overlay */}
+      <div 
+        className={`sidebar-overlay ${sidebarOpen ? 'show' : ''}`} 
+        onClick={() => setSidebarOpen(false)}
+      ></div>
+
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-brand">
           <div className="brand-icon">F</div>
           <div className="brand-text">
             <h1>National Register</h1>
             <p>Physical File Movement</p>
           </div>
+          <button className="sidebar-close-btn" onClick={() => setSidebarOpen(false)} title="Close Menu">
+            <X size={18} />
+          </button>
         </div>
 
         <nav className="sidebar-menu">
@@ -286,7 +296,7 @@ function App() {
             <>
               <button 
                 className={`menu-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-                onClick={() => setActiveTab('dashboard')}
+                onClick={() => { setActiveTab('dashboard'); setSidebarOpen(false); }}
               >
                 <LayoutDashboard size={18} />
                 Overview Dashboard
@@ -294,7 +304,7 @@ function App() {
               
               <button 
                 className={`menu-item ${activeTab === 'registers' ? 'active' : ''}`}
-                onClick={() => setActiveTab('registers')}
+                onClick={() => { setActiveTab('registers'); setSidebarOpen(false); }}
               >
                 <FileText size={18} />
                 Master Registers
@@ -302,7 +312,7 @@ function App() {
               
               <button 
                 className={`menu-item ${activeTab === 'issue_file' ? 'active' : ''}`}
-                onClick={() => setActiveTab('issue_file')}
+                onClick={() => { setActiveTab('issue_file'); setSidebarOpen(false); }}
               >
                 <Send size={18} />
                 Issue File Tab
@@ -310,7 +320,7 @@ function App() {
               
               <button 
                 className={`menu-item ${activeTab === 'register_file' ? 'active' : ''}`}
-                onClick={() => setActiveTab('register_file')}
+                onClick={() => { setActiveTab('register_file'); setSidebarOpen(false); }}
               >
                 <PlusCircle size={18} />
                 Register File
@@ -318,7 +328,7 @@ function App() {
               
               <button 
                 className={`menu-item ${activeTab === 'enroll_recipient' ? 'active' : ''}`}
-                onClick={() => setActiveTab('enroll_recipient')}
+                onClick={() => { setActiveTab('enroll_recipient'); setSidebarOpen(false); }}
               >
                 <UserPlus size={18} />
                 Enroll Official
@@ -326,7 +336,7 @@ function App() {
               
               <button 
                 className={`menu-item ${activeTab === 'alerts' ? 'active' : ''}`}
-                onClick={() => setActiveTab('alerts')}
+                onClick={() => { setActiveTab('alerts'); setSidebarOpen(false); }}
               >
                 <ShieldAlert size={18} />
                 Custody Alerts
@@ -334,7 +344,7 @@ function App() {
 
               <button 
                 className={`menu-item ${activeTab === 'settings' ? 'active' : ''}`}
-                onClick={() => setActiveTab('settings')}
+                onClick={() => { setActiveTab('settings'); setSidebarOpen(false); }}
               >
                 <Settings size={18} />
                 Preference Settings
@@ -342,7 +352,7 @@ function App() {
               
               <button 
                 className={`menu-item ${activeTab === 'scanner' ? 'active' : ''}`}
-                onClick={() => setActiveTab('scanner')}
+                onClick={() => { setActiveTab('scanner'); setSidebarOpen(false); }}
               >
                 <QrCode size={18} />
                 Scan QR Code
@@ -352,7 +362,7 @@ function App() {
             <>
               <button 
                 className={`menu-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-                onClick={() => setActiveTab('dashboard')}
+                onClick={() => { setActiveTab('dashboard'); setSidebarOpen(false); }}
               >
                 <LayoutDashboard size={18} />
                 Dashboard View
@@ -360,7 +370,7 @@ function App() {
               
               <button 
                 className={`menu-item ${activeTab === 'scanner' ? 'active' : ''}`}
-                onClick={() => setActiveTab('scanner')}
+                onClick={() => { setActiveTab('scanner'); setSidebarOpen(false); }}
               >
                 <QrCode size={18} />
                 Scan QR Code
@@ -380,7 +390,7 @@ function App() {
             <div style={{ fontSize: '11px', color: 'var(--accent-gold)', marginTop: '2px' }}>
               {sessionUser.designation}
             </div>
-            <button className="logout-btn" onClick={handleLogout}>
+            <button className="logout-btn" onClick={() => { handleLogout(); setSidebarOpen(false); }}>
               <LogOut size={12} /> Sign Out
             </button>
           </div>
@@ -392,6 +402,10 @@ function App() {
         
         {/* Header bar */}
         <header className="main-header">
+          <button className="mobile-menu-toggle" onClick={() => setSidebarOpen(true)} title="Open Menu">
+            <Menu size={20} />
+          </button>
+
           <div className="header-title">
             <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <Building size={12} /> {orgName}
@@ -465,14 +479,21 @@ function App() {
       <nav className="bottom-nav">
         <button 
           className={`bottom-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-          onClick={() => setActiveTab('dashboard')}
+          onClick={() => { setActiveTab('dashboard'); setSidebarOpen(false); }}
         >
           <LayoutDashboard size={20} />
           <span>Dashboard</span>
         </button>
         <button 
+          className={`bottom-nav-item ${sidebarOpen ? 'active' : ''}`}
+          onClick={() => setSidebarOpen(true)}
+        >
+          <Menu size={20} />
+          <span>Menu</span>
+        </button>
+        <button 
           className={`bottom-nav-item ${activeTab === 'scanner' ? 'active' : ''}`}
-          onClick={() => setActiveTab('scanner')}
+          onClick={() => { setActiveTab('scanner'); setSidebarOpen(false); }}
         >
           <QrCode size={20} />
           <span>Scan QR</span>
