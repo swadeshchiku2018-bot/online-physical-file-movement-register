@@ -22,7 +22,9 @@ import {
   LogOut,
   Lock,
   X,
-  FileText
+  FileText,
+  PlusCircle,
+  UserPlus
 } from 'lucide-react';
 import './App.css';
 
@@ -40,7 +42,7 @@ interface ToastMessage {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'scanner'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'registers' | 'register_file' | 'enroll_recipient' | 'alerts' | 'scanner'>('dashboard');
   
   // Auth states
   const [sessionUser, setSessionUser] = useState<UserSession | null>(() => {
@@ -275,21 +277,75 @@ function App() {
         </div>
 
         <nav className="sidebar-menu">
-          <button 
-            className={`menu-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
-          >
-            <LayoutDashboard size={18} />
-            Dashboard View
-          </button>
-          
-          <button 
-            className={`menu-item ${activeTab === 'scanner' ? 'active' : ''}`}
-            onClick={() => setActiveTab('scanner')}
-          >
-            <QrCode size={18} />
-            Scan QR Code
-          </button>
+          {sessionUser.isAdmin ? (
+            <>
+              <button 
+                className={`menu-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+                onClick={() => setActiveTab('dashboard')}
+              >
+                <LayoutDashboard size={18} />
+                Overview Dashboard
+              </button>
+              
+              <button 
+                className={`menu-item ${activeTab === 'registers' ? 'active' : ''}`}
+                onClick={() => setActiveTab('registers')}
+              >
+                <FileText size={18} />
+                Master Registers
+              </button>
+              
+              <button 
+                className={`menu-item ${activeTab === 'register_file' ? 'active' : ''}`}
+                onClick={() => setActiveTab('register_file')}
+              >
+                <PlusCircle size={18} />
+                Register File
+              </button>
+              
+              <button 
+                className={`menu-item ${activeTab === 'enroll_recipient' ? 'active' : ''}`}
+                onClick={() => setActiveTab('enroll_recipient')}
+              >
+                <UserPlus size={18} />
+                Enroll Official
+              </button>
+              
+              <button 
+                className={`menu-item ${activeTab === 'alerts' ? 'active' : ''}`}
+                onClick={() => setActiveTab('alerts')}
+              >
+                <ShieldAlert size={18} />
+                Custody Alerts
+              </button>
+              
+              <button 
+                className={`menu-item ${activeTab === 'scanner' ? 'active' : ''}`}
+                onClick={() => setActiveTab('scanner')}
+              >
+                <QrCode size={18} />
+                Scan QR Code
+              </button>
+            </>
+          ) : (
+            <>
+              <button 
+                className={`menu-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+                onClick={() => setActiveTab('dashboard')}
+              >
+                <LayoutDashboard size={18} />
+                Dashboard View
+              </button>
+              
+              <button 
+                className={`menu-item ${activeTab === 'scanner' ? 'active' : ''}`}
+                onClick={() => setActiveTab('scanner')}
+              >
+                <QrCode size={18} />
+                Scan QR Code
+              </button>
+            </>
+          )}
         </nav>
 
         <div className="sidebar-footer">
@@ -340,16 +396,28 @@ function App() {
         </header>
 
         {/* Dynamic Navigation Content */}
-        {activeTab === 'dashboard' ? (
-          sessionUser.isAdmin ? (
+        {sessionUser.isAdmin ? (
+          activeTab === 'scanner' ? (
+            <QRScannerPanel 
+              currentUser={sessionUser}
+              onActionComplete={triggerToast}
+              filesList={filesList}
+              recipientsList={recipientsList}
+              refreshData={refreshData}
+            />
+          ) : (
             <AdminDashboard 
               onActionComplete={triggerToast}
               filesList={filesList}
               recipientsList={recipientsList}
               movementsList={movementsList}
               refreshData={refreshData}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
             />
-          ) : (
+          )
+        ) : (
+          activeTab === 'dashboard' ? (
             <RecipientDashboard 
               currentUser={sessionUser}
               onActionComplete={triggerToast}
@@ -358,15 +426,15 @@ function App() {
               movementsList={movementsList}
               refreshData={refreshData}
             />
+          ) : (
+            <QRScannerPanel 
+              currentUser={sessionUser}
+              onActionComplete={triggerToast}
+              filesList={filesList}
+              recipientsList={recipientsList}
+              refreshData={refreshData}
+            />
           )
-        ) : (
-          <QRScannerPanel 
-            currentUser={sessionUser}
-            onActionComplete={triggerToast}
-            filesList={filesList}
-            recipientsList={recipientsList}
-            refreshData={refreshData}
-          />
         )}
       </main>
 

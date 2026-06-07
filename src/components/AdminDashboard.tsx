@@ -24,7 +24,9 @@ import {
   Download,
   ShieldAlert,
   Send,
-  CornerUpLeft
+  CornerUpLeft,
+  Lock,
+  User
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -33,6 +35,8 @@ interface AdminDashboardProps {
   recipientsList: Recipient[];
   movementsList: Movement[];
   refreshData: () => void;
+  activeTab: string;
+  setActiveTab: (tab: any) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -40,19 +44,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   filesList,
   recipientsList,
   movementsList,
-  refreshData
+  refreshData,
+  activeTab,
+  setActiveTab
 }) => {
-  // Tabs for sub-sections in Admin (Files & Register, Add Recipient/File)
-  const [activeSubTab, setActiveSubTab] = useState<'files' | 'history' | 'recipients'>('files');
+  // Local register sub-tab (Catalog, History, Recipients)
+  const [registerSubTab, setRegisterSubTab] = useState<'files' | 'history' | 'recipients'>('files');
 
   // File Creation form state
   const [fileId, setFileId] = useState<string>('');
   const [subject, setSubject] = useState<string>('');
   const [department, setDepartment] = useState<string>('');
 
-  // Recipient Creation state
+  // Recipient Creation state with custom credentials
   const [recipientName, setRecipientName] = useState<string>('');
   const [recipientDesignation, setRecipientDesignation] = useState<string>('');
+  const [recipientLoginId, setRecipientLoginId] = useState<string>('');
+  const [recipientPassword, setRecipientPassword] = useState<string>('');
 
   // Search & Filter states
   const [fileSearch, setFileSearch] = useState<string>('');
@@ -93,7 +101,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   }, [qrModalFile]);
 
-  // Handle File Creation
+  // Handle File Registration
   const handleCreateFile = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fileId.trim() || !subject.trim() || !department.trim()) {
@@ -109,12 +117,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setFileId('');
       setSubject('');
       setDepartment('');
+      setActiveTab('registers'); // Redirect to register catalog
     } catch (err: any) {
       onActionComplete(err.message || 'Error creating file.', true);
     }
   };
 
-  // Handle Recipient Creation
+  // Handle Recipient Creation with custom credentials
   const handleCreateRecipient = (e: React.FormEvent) => {
     e.preventDefault();
     if (!recipientName.trim() || !recipientDesignation.trim()) {
@@ -123,11 +132,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
 
     try {
-      const newRec = addRecipient(recipientName.trim(), recipientDesignation.trim(), true);
+      const newRec = addRecipient(
+        recipientName.trim(), 
+        recipientDesignation.trim(), 
+        true,
+        recipientLoginId.trim() || undefined,
+        recipientPassword.trim() || undefined
+      );
       refreshData();
-      onActionComplete(`Recipient "${newRec.name}" registered successfully as ${newRec.designation}.`);
+      
+      const credentialsInfo = `Login ID: ${newRec.loginId}, Password: ${newRec.password || 'password'}`;
+      onActionComplete(`Recipient "${newRec.name}" enrolled. Credentials -> ${credentialsInfo}`);
+      
+      // Clear inputs
       setRecipientName('');
       setRecipientDesignation('');
+      setRecipientLoginId('');
+      setRecipientPassword('');
+      setActiveTab('registers'); // Redirect to list
     } catch (err: any) {
       onActionComplete(err.message || 'Error creating recipient.', true);
     }
@@ -243,138 +265,140 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Pending files list
   const pendingFiles = filesList.filter(f => f.status === 'Issued');
+  const overdueFiles = pendingFiles.filter(f => isFileOverdue(f));
 
   return (
     <div className="view-container">
       
-      {/* 4 Stats Cards */}
-      <div className="stats-grid">
-        <div className="glass-panel stat-card">
-          <div className="stat-info">
-            <h3>Total Files</h3>
-            <p>{totalFiles}</p>
-          </div>
-          <div className="stat-icon total">
-            <FileText size={24} />
-          </div>
-        </div>
+      {/* Tab 1: OVERVIEW DASHBOARD */}
+      {activeTab === 'dashboard' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+          <div className="stats-grid">
+            <div className="glass-panel stat-card" style={{ cursor: 'pointer' }} onClick={() => { setRegisterSubTab('files'); setActiveTab('registers'); }}>
+              <div className="stat-info">
+                <h3>Total Registered Files</h3>
+                <p>{totalFiles}</p>
+              </div>
+              <div className="stat-icon total">
+                <FileText size={24} />
+              </div>
+            </div>
 
-        <div className="glass-panel stat-card">
-          <div className="stat-info">
-            <h3>Issued Custody</h3>
-            <p>{issuedFiles}</p>
-          </div>
-          <div className="stat-icon issued">
-            <TrendingUp size={24} />
-          </div>
-        </div>
+            <div className="glass-panel stat-card" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('alerts')}>
+              <div className="stat-info">
+                <h3>Issued Files (Pending)</h3>
+                <p>{issuedFiles}</p>
+              </div>
+              <div className="stat-icon issued">
+                <TrendingUp size={24} />
+              </div>
+            </div>
 
-        <div className="glass-panel stat-card">
-          <div className="stat-info">
-            <h3>Safe (Returned)</h3>
-            <p>{returnedFiles}</p>
-          </div>
-          <div className="stat-icon returned">
-            <FileCheck size={24} />
-          </div>
-        </div>
+            <div className="glass-panel stat-card" style={{ cursor: 'pointer' }} onClick={() => { setRegisterSubTab('files'); setActiveTab('registers'); }}>
+              <div className="stat-info">
+                <h3>Safe in Record Room</h3>
+                <p>{returnedFiles}</p>
+              </div>
+              <div className="stat-icon returned">
+                <FileCheck size={24} />
+              </div>
+            </div>
 
-        <div className="glass-panel stat-card">
-          <div className="stat-info">
-            <h3>Movements Logged</h3>
-            <p>{movementsList.length}</p>
+            <div className="glass-panel stat-card" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('alerts')}>
+              <div className="stat-info">
+                <h3>Overdue Warnings</h3>
+                <p style={{ color: overdueFiles.length > 0 ? '#f87171' : 'var(--text-main)' }}>{overdueFiles.length}</p>
+              </div>
+              <div className="stat-icon pending" style={{ background: overdueFiles.length > 0 ? 'var(--accent-red-glow)' : 'rgba(255,255,255,0.05)', color: overdueFiles.length > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>
+                <ShieldAlert size={24} />
+              </div>
+            </div>
           </div>
-          <div className="stat-icon pending">
-            <History size={24} />
-          </div>
-        </div>
-      </div>
 
-      {/* Alerts & Attention Panel */}
-      {pendingFiles.length > 0 && (
-        <div className="glass-panel alerts-section" style={{ borderRadius: 'var(--border-radius)' }}>
-          <div className="card-header" style={{ borderBottom: '1px solid rgba(251,191,36,0.2)' }}>
-            <h3 style={{ color: 'var(--accent-gold)' }}>
-              <ShieldAlert size={20} /> File Custody Alert Center
-            </h3>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-              Active custody tracking & overdue enforcement
-            </span>
-          </div>
-          <div className="card-body" style={{ padding: 0 }}>
-            {pendingFiles.map(file => {
-              const overdue = isFileOverdue(file);
-              const elapsed = getElapsedTimeText(file.lastMovedDate);
-              const currentHolder = getHolderName(file.currentHolderId);
-              // Count other files pending with this official
-              const otherPendingCount = filesList.filter(f => f.currentHolderId === file.currentHolderId && f.status === 'Issued').length;
-              return (
-                <div key={file.id} className={`alert-item ${overdue ? 'bg-overdue overdue-border overdue-row' : ''}`}>
-                  <div className="alert-item-info">
-                    <span className="file-id-badge">{file.id}</span>
-                    <div>
-                      <div style={{ fontWeight: 600, color: overdue ? '#ef4444' : 'var(--text-main)' }}>
-                        {file.subject}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Custodian: <strong>{currentHolder}</strong> (holds {otherPendingCount} {otherPendingCount === 1 ? 'file' : 'files'})
-                      </div>
-                    </div>
-                  </div>
-                  <div className="alert-item-time">
-                    <div className={overdue ? 'overdue-text' : ''} style={{ fontWeight: 600 }}>
-                      Pending: {elapsed}
-                    </div>
-                    {file.anticipatedReturnDate && (
-                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Promise: {new Date(file.anticipatedReturnDate).toLocaleDateString()} {new Date(file.anticipatedReturnDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </div>
+          {/* Quick Logs Summary in Dashboard */}
+          <div className="glass-panel" style={{ padding: '24px' }}>
+            <div className="card-header" style={{ padding: '0 0 16px 0', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3><History size={18} className="text-gold" /> Recent Movements Summary</h3>
+              <button className="btn btn-secondary" onClick={() => { setRegisterSubTab('history'); setActiveTab('registers'); }} style={{ width: 'auto', padding: '6px 12px', fontSize: '12px' }}>
+                View All Register Logs
+              </button>
+            </div>
+            <div className="card-body" style={{ padding: '16px 0 0 0' }}>
+              <div className="table-container">
+                <table className="data-table" style={{ fontSize: '13px' }}>
+                  <thead>
+                    <tr>
+                      <th>Time</th>
+                      <th>File ID</th>
+                      <th>Sender</th>
+                      <th>Receiver</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {movementsList.slice(0, 5).map(m => (
+                      <tr key={m.id}>
+                        <td>{new Date(m.timestamp).toLocaleDateString()} {new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                        <td style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>{m.fileId}</td>
+                        <td>{m.senderName}</td>
+                        <td>{m.receiverName}</td>
+                        <td>
+                          <span className={`status-pill ${m.type.toLowerCase() === 'issue' ? 'issued' : m.type.toLowerCase() === 'return' ? 'returned' : 'transit'}`}>
+                            {m.type}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {movementsList.length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>
+                          No movement logs recorded yet.
+                        </td>
+                      </tr>
                     )}
-                  </div>
-                </div>
-              );
-            })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Main Split Column */}
-      <div className="dashboard-split">
-        
-        {/* Left Side - Tables & Logs based on sub-tab navigation */}
+      {/* Tab 2: MASTER REGISTERS (File Catalog, History, Officials List) */}
+      {activeTab === 'registers' && (
         <div className="glass-panel">
           <div className="card-header" style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'stretch' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '18px' }}><FileText size={20} className="text-gold" /> Master Registers</h3>
+              <h3 style={{ fontSize: '18px' }}><FileText size={20} className="text-gold" /> Master Register Catalog</h3>
               
               {/* Internal Tab switcher */}
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button 
-                  className={`btn btn-secondary ${activeSubTab === 'files' ? 'active' : ''}`}
-                  onClick={() => setActiveSubTab('files')}
+                  className={`btn btn-secondary ${registerSubTab === 'files' ? 'active' : ''}`}
+                  onClick={() => setRegisterSubTab('files')}
                   style={{ width: 'auto', padding: '6px 14px', fontSize: '12px' }}
                 >
                   File Catalog
                 </button>
                 <button 
-                  className={`btn btn-secondary ${activeSubTab === 'history' ? 'active' : ''}`}
-                  onClick={() => setActiveSubTab('history')}
+                  className={`btn btn-secondary ${registerSubTab === 'history' ? 'active' : ''}`}
+                  onClick={() => setRegisterSubTab('history')}
                   style={{ width: 'auto', padding: '6px 14px', fontSize: '12px' }}
                 >
-                  Movement Register
+                  Movement History
                 </button>
                 <button 
-                  className={`btn btn-secondary ${activeSubTab === 'recipients' ? 'active' : ''}`}
-                  onClick={() => setActiveSubTab('recipients')}
+                  className={`btn btn-secondary ${registerSubTab === 'recipients' ? 'active' : ''}`}
+                  onClick={() => setRegisterSubTab('recipients')}
                   style={{ width: 'auto', padding: '6px 14px', fontSize: '12px' }}
                 >
-                  Recipients List
+                  Registered Officials
                 </button>
               </div>
             </div>
 
             {/* Sub-Tab Controls (Searches) */}
-            {activeSubTab === 'files' && (
+            {registerSubTab === 'files' && (
               <div style={{ position: 'relative' }}>
                 <Search size={16} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
                 <input 
@@ -388,7 +412,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             )}
 
-            {activeSubTab === 'history' && (
+            {registerSubTab === 'history' && (
               <div style={{ display: 'flex', gap: '12px' }}>
                 <div style={{ position: 'relative', flex: 1 }}>
                   <Search size={16} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
@@ -419,7 +443,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="card-body" style={{ padding: 0 }}>
             
             {/* View 1: Files Table */}
-            {activeSubTab === 'files' && (
+            {registerSubTab === 'files' && (
               <div className="table-container">
                 <table className="data-table">
                   <thead>
@@ -508,7 +532,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             )}
 
             {/* View 2: History Register Table */}
-            {activeSubTab === 'history' && (
+            {registerSubTab === 'history' && (
               <div className="table-container">
                 <table className="data-table">
                   <thead>
@@ -561,7 +585,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             )}
 
             {/* View 3: Recipients List */}
-            {activeSubTab === 'recipients' && (
+            {registerSubTab === 'recipients' && (
               <div className="table-container">
                 <table className="data-table">
                   <thead>
@@ -569,6 +593,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <th>Recipient ID</th>
                       <th>Full Name</th>
                       <th>Designation</th>
+                      <th>Login ID / Username</th>
                       <th>Registration Status</th>
                     </tr>
                   </thead>
@@ -578,6 +603,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <td style={{ fontWeight: 600 }}>{rec.id}</td>
                         <td style={{ fontWeight: 500 }}>{rec.name}</td>
                         <td>{rec.designation}</td>
+                        <td style={{ fontFamily: 'monospace', color: 'var(--accent-gold)' }}>{rec.loginId || 'n/a'}</td>
                         <td>
                           {rec.isRegistered ? (
                             <span style={{ fontSize: '11px', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
@@ -598,16 +624,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           </div>
         </div>
+      )}
 
-        {/* Right Side - Add New Forms */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-          
-          {/* Form 1: File Registration */}
-          <div className="glass-panel">
-            <div className="card-header">
-              <h3><PlusCircle size={18} className="text-gold" /> Register Physical File</h3>
+      {/* Tab 3: REGISTER FILE FORM */}
+      {activeTab === 'register_file' && (
+        <div style={{ maxWidth: '650px', margin: '0 auto', width: '100%' }}>
+          <div className="glass-panel" style={{ padding: '30px' }}>
+            <div className="card-header" style={{ padding: '0 0 20px 0', borderBottom: '1px solid var(--border-color)', marginBottom: '20px' }}>
+              <h3><PlusCircle size={20} className="text-gold" /> Register Physical File</h3>
             </div>
-            <div className="card-body">
+            <div className="card-body" style={{ padding: 0 }}>
               <form onSubmit={handleCreateFile}>
                 
                 <div className="form-group">
@@ -634,7 +660,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   />
                 </div>
 
-                <div className="form-group">
+                <div className="form-group" style={{ marginBottom: '24px' }}>
                   <label>Department / Section</label>
                   <select 
                     className="input-field select-field" 
@@ -651,33 +677,37 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </select>
                 </div>
 
-                <button type="submit" className="btn btn-primary">
-                  <Plus size={16} /> Register File Record
+                <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+                  <Plus size={16} /> Register File Record & View Catalog
                 </button>
               </form>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Form 2: Recipient Enrolment */}
-          <div className="glass-panel">
-            <div className="card-header">
-              <h3><UserPlus size={18} className="text-gold" /> Enroll Official / Recipient</h3>
+      {/* Tab 4: ENROLL OFFICIAL FORM (with custom ID/Password fields) */}
+      {activeTab === 'enroll_recipient' && (
+        <div style={{ maxWidth: '650px', margin: '0 auto', width: '100%' }}>
+          <div className="glass-panel" style={{ padding: '30px' }}>
+            <div className="card-header" style={{ padding: '0 0 20px 0', borderBottom: '1px solid var(--border-color)', marginBottom: '20px' }}>
+              <h3><UserPlus size={20} className="text-gold" /> Enroll Official Profile</h3>
             </div>
-            <div className="card-body">
+            <div className="card-body" style={{ padding: 0 }}>
               <form onSubmit={handleCreateRecipient}>
                 <div className="form-group">
                   <label>Official's Full Name</label>
                   <input 
                     type="text" 
                     className="input-field" 
-                    placeholder="e.g. Shri Swadesh Kumar" 
+                    placeholder="e.g. Priya Patel" 
                     value={recipientName}
                     onChange={(e) => setRecipientName(e.target.value)}
                     required
                   />
                 </div>
 
-                <div className="form-group">
+                <div className="form-group" style={{ marginBottom: '24px' }}>
                   <label>Designation / Post</label>
                   <input 
                     type="text" 
@@ -689,16 +719,120 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   />
                 </div>
 
-                <button type="submit" className="btn btn-secondary">
-                  <Users size={16} /> Enroll Official Profile
+                {/* Custom User Credentials Settings */}
+                <div style={{ padding: '20px', background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--border-color)', borderRadius: '8px', marginBottom: '24px' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent-gold)', textTransform: 'uppercase', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Lock size={14} /> Custom Portal Login Settings (Optional)
+                  </h4>
+                  
+                  <div className="form-group">
+                    <label>Set Custom Login ID / Username</label>
+                    <div style={{ position: 'relative' }}>
+                      <User size={14} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="Default: lowercase name (e.g. priya)" 
+                        value={recipientLoginId}
+                        onChange={(e) => setRecipientLoginId(e.target.value)}
+                        style={{ paddingLeft: '38px', fontSize: '13px' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Set Custom Login Password</label>
+                    <div style={{ position: 'relative' }}>
+                      <Lock size={14} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="Default: password" 
+                        value={recipientPassword}
+                        onChange={(e) => setRecipientPassword(e.target.value)}
+                        style={{ paddingLeft: '38px', fontSize: '13px' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+                  <Users size={16} /> Enroll Official & Show Credentials
                 </button>
               </form>
             </div>
           </div>
-
         </div>
+      )}
 
-      </div>
+      {/* Tab 5: DEDICATED FILE CUSTODY ALERTS VIEW */}
+      {activeTab === 'alerts' && (
+        <div className="glass-panel" style={{ borderRadius: 'var(--border-radius)' }}>
+          <div className="card-header" style={{ borderBottom: '1px solid rgba(251,191,36,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ color: 'var(--accent-gold)', fontSize: '18px' }}>
+              <ShieldAlert size={22} /> File Custody Alert Center
+            </h3>
+            <span style={{ fontSize: '12px', padding: '4px 10px', background: 'rgba(251,191,36,0.1)', borderRadius: '4px', border: '1px solid rgba(251,191,36,0.2)', color: 'var(--accent-gold)' }}>
+              Active Alerts: {overdueFiles.length} Overdue / {pendingFiles.length} Issued
+            </span>
+          </div>
+          <div className="card-body" style={{ padding: 0 }}>
+            {pendingFiles.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+                <FileCheck size={48} style={{ color: '#10b981', opacity: 0.3, marginBottom: '16px' }} />
+                <p style={{ fontSize: '15px', fontWeight: 600 }}>All physical files are safely stored in the Record Room.</p>
+                <p style={{ fontSize: '12px', opacity: 0.7, marginTop: '4px' }}>No active alerts generated.</p>
+              </div>
+            ) : (
+              pendingFiles.map(file => {
+                const overdue = isFileOverdue(file);
+                const elapsed = getElapsedTimeText(file.lastMovedDate);
+                const currentHolder = getHolderName(file.currentHolderId);
+                const otherPendingCount = filesList.filter(f => f.currentHolderId === file.currentHolderId && f.status === 'Issued').length;
+                return (
+                  <div key={file.id} className={`alert-item ${overdue ? 'bg-overdue overdue-border overdue-row' : ''}`} style={{ padding: '20px 24px' }}>
+                    <div className="alert-item-info">
+                      <span className="file-id-badge" style={{ fontSize: '13px' }}>{file.id}</span>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '15px', color: overdue ? '#ef4444' : 'var(--text-main)' }}>
+                          {file.subject}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                          Current Custodian: <strong style={{ color: 'var(--text-main)' }}>{currentHolder}</strong> (holds {otherPendingCount} active {otherPendingCount === 1 ? 'file' : 'files'})
+                        </div>
+                        {file.reason && (
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted-dark)', fontStyle: 'italic', marginTop: '4px' }}>
+                            Purpose: "{file.reason}"
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="alert-item-time" style={{ minWidth: '150px' }}>
+                      <div className={overdue ? 'overdue-text' : ''} style={{ fontWeight: 600, fontSize: '14px' }}>
+                        Time Out: {elapsed}
+                      </div>
+                      {file.anticipatedReturnDate && (
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                          Promise: {new Date(file.anticipatedReturnDate).toLocaleDateString()} {new Date(file.anticipatedReturnDate).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </div>
+                      )}
+                      <div style={{ marginTop: '8px' }}>
+                        <button 
+                          className="btn btn-secondary" 
+                          onClick={() => handleDirectReturn(file.id)}
+                          style={{ width: 'auto', padding: '4px 10px', fontSize: '11px', borderColor: overdue ? 'rgba(239, 68, 68, 0.3)' : '', color: overdue ? '#f87171' : '' }}
+                        >
+                          <CornerUpLeft size={11} /> Recall File
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
 
       {/* QR Code Viewer Modal Overlay */}
       {qrModalFile && (

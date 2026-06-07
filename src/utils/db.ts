@@ -167,12 +167,25 @@ export const getRecipients = (): Recipient[] => {
   return JSON.parse(localStorage.getItem(RECIPIENTS_KEY) || '[]');
 };
 
-export const addRecipient = (name: string, designation: string, isRegistered = true): Recipient => {
+export const addRecipient = (
+  name: string, 
+  designation: string, 
+  isRegistered = true,
+  loginId?: string,
+  password?: string
+): Recipient => {
   const recipients = getRecipients();
   const newId = `REC-${String(recipients.length + 1).padStart(3, '0')}`;
-  const loginId = name.toLowerCase().replace(/\s+/g, '');
-  const password = 'password';
-  const newRecipient: Recipient = { id: newId, name, designation, isRegistered, loginId, password };
+  const finalLoginId = loginId || name.toLowerCase().replace(/\s+/g, '');
+  const finalPassword = password || 'password';
+  const newRecipient: Recipient = { 
+    id: newId, 
+    name, 
+    designation, 
+    isRegistered, 
+    loginId: finalLoginId, 
+    password: finalPassword 
+  };
   recipients.push(newRecipient);
   localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(recipients));
   return newRecipient;
