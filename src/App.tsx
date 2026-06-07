@@ -416,7 +416,7 @@ function App() {
           <div className="header-meta">
             {/* Global Search Button */}
             <button className="header-search-btn" onClick={() => { setSearchQuery(''); setSearchModalOpen(true); }}>
-              <Search size={14} /> Search Register
+              <Search size={14} /> <span className="search-btn-text">Search Register</span>
             </button>
 
             <span className={`badge-role ${sessionUser.isAdmin ? 'admin' : 'recipient'}`}>
