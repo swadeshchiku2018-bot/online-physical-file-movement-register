@@ -103,6 +103,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [historySearch, setHistorySearch] = useState<string>('');
   const [historyFilterType, setHistoryFilterType] = useState<string>('ALL');
 
+  // Master Ledger Filter States
+  const [filterRecipient, setFilterRecipient] = useState<string>('');
+  const [filterDate, setFilterDate] = useState<string>('');
+  const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [filterSection, setFilterSection] = useState<string>('');
+
   // QR Modal state
   const [qrModalFile, setQrModalFile] = useState<FileItem | null>(null);
   const [qrModalCodeUrl, setQrModalCodeUrl] = useState<string>('');
@@ -389,12 +395,93 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  const handleClearFilters = () => {
+    setFilterRecipient('');
+    setFilterDate('');
+    setFilterStatus('ALL');
+    setFilterSection('');
+    setFileSearch('');
+    setHistorySearch('');
+    setHistoryFilterType('ALL');
+  };
+
+  const handleExportCSV = () => {
+    let headers: string[] = [];
+    let rows: string[][] = [];
+    let filename = '';
+
+    if (registerSubTab === 'files') {
+      headers = ['File ID', 'Subject Detail', 'Department/Section', 'Custodian', 'Status', 'Last Moved Date', 'Promise Return Date', 'Reason'];
+      rows = filteredFiles.map(f => [
+        f.id,
+        f.subject,
+        f.department,
+        getHolderName(f.currentHolderId),
+        f.status,
+        f.lastMovedDate ? new Date(f.lastMovedDate).toLocaleString() : 'N/A',
+        f.anticipatedReturnDate ? new Date(f.anticipatedReturnDate).toLocaleString() : 'N/A',
+        f.reason || 'N/A'
+      ]);
+      filename = 'Digital_File_Movement_Ledger_Catalog.csv';
+    } else if (registerSubTab === 'history') {
+      headers = ['Action Time', 'File ID', 'Subject', 'From (Sender)', 'To (Receiver)', 'Action Type', 'Remarks'];
+      rows = filteredHistory.map(m => [
+        new Date(m.timestamp).toLocaleString(),
+        m.fileId,
+        m.fileSubject,
+        m.senderName,
+        m.receiverName,
+        m.type,
+        m.remarks
+      ]);
+      filename = 'Digital_File_Movement_Ledger_History.csv';
+    } else {
+      headers = ['Recipient ID', 'Full Name', 'Designation', 'Login ID', 'Registration Status'];
+      rows = recipientsList.map(r => [
+        r.id,
+        r.name,
+        r.designation,
+        r.loginId || 'N/A',
+        r.isRegistered ? 'Registered Profile' : 'Guest Custodian'
+      ]);
+      filename = 'Digital_File_Movement_Officials.csv';
+    }
+
+    // Convert to CSV content
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(val => {
+        const cleanVal = String(val).replace(/"/g, '""');
+        return `"${cleanVal}"`;
+      }).join(','))
+    ].join('\n');
+
+    // Create download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    onActionComplete(`Data exported successfully to ${filename}`);
+  };
+
   // Filters
-  const filteredFiles = filesList.filter(f => 
-    f.id.toLowerCase().includes(fileSearch.toLowerCase()) ||
-    f.subject.toLowerCase().includes(fileSearch.toLowerCase()) ||
-    f.department.toLowerCase().includes(fileSearch.toLowerCase())
-  );
+  const filteredFiles = filesList.filter(f => {
+    const matchesSearch = f.id.toLowerCase().includes(fileSearch.toLowerCase()) ||
+                          f.subject.toLowerCase().includes(fileSearch.toLowerCase()) ||
+                          f.department.toLowerCase().includes(fileSearch.toLowerCase());
+    
+    const matchesRecipient = !filterRecipient || f.currentHolderId === filterRecipient;
+    const matchesStatus = filterStatus === 'ALL' || f.status === filterStatus;
+    const matchesSection = !filterSection || f.department === filterSection;
+    const matchesDate = !filterDate || (f.lastMovedDate && f.lastMovedDate.startsWith(filterDate));
+    
+    return matchesSearch && matchesRecipient && matchesStatus && matchesSection && matchesDate;
+  });
 
   const filteredHistory = movementsList.filter(m => {
     const matchesSearch = 
@@ -404,7 +491,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       m.receiverName.toLowerCase().includes(historySearch.toLowerCase());
     
     const matchesFilter = historyFilterType === 'ALL' || m.type.toUpperCase() === historyFilterType;
-    return matchesSearch && matchesFilter;
+    
+    const matchesRecipient = !filterRecipient || 
+                             m.senderId === filterRecipient || 
+                             m.receiverId === filterRecipient;
+                             
+    const matchesSection = !filterSection || 
+                           filesList.find(f => f.id === m.fileId)?.department === filterSection;
+                           
+    const matchesDate = !filterDate || m.timestamp.startsWith(filterDate);
+    
+    return matchesSearch && matchesFilter && matchesRecipient && matchesSection && matchesDate;
   });
 
   // Filter issue files search results
@@ -515,12 +612,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* Tab 2: MASTER REGISTERS (File Catalog, History, Officials List) */}
+      {/* Tab 2: MASTER LEDGER (File Catalog, History, Officials List) */}
       {activeTab === 'registers' && (
         <div className="glass-panel">
           <div className="card-header" style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'stretch' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '18px' }}><FileText size={20} className="text-gold" /> Master Register Catalog</h3>
+              <h3 style={{ fontSize: '18px' }}><FileText size={20} className="text-gold" /> Master Ledger Catalog</h3>
               
               {/* Internal Tab switcher */}
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -546,6 +643,89 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   Registered Officials
                 </button>
               </div>
+            </div>
+
+            {/* Advanced Filters Panel */}
+            <div className="ledger-filters-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Section / Department</label>
+                <select 
+                  className="input-field select-field"
+                  value={filterSection}
+                  onChange={(e) => setFilterSection(e.target.value)}
+                  style={{ fontSize: '12px', padding: '6px 10px', height: '34px' }}
+                >
+                  <option value="">All Sections</option>
+                  <option value="Establishment Section">Establishment Section</option>
+                  <option value="Finance & Accounts Branch">Finance & Accounts Branch</option>
+                  <option value="IT Infrastructure Division">IT Infrastructure Division</option>
+                  <option value="General Administration Division">General Administration Division</option>
+                  <option value="Policy & Coordination Unit">Policy & Coordination Unit</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Custodian / Recipient</label>
+                <select 
+                  className="input-field select-field"
+                  value={filterRecipient}
+                  onChange={(e) => setFilterRecipient(e.target.value)}
+                  style={{ fontSize: '12px', padding: '6px 10px', height: '34px' }}
+                >
+                  <option value="">All Officials</option>
+                  {recipientsList.map(r => (
+                    <option key={r.id} value={r.id}>{r.name} ({r.designation})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Status</label>
+                <select 
+                  className="input-field select-field"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  style={{ fontSize: '12px', padding: '6px 10px', height: '34px' }}
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="Returned">Safe in Record Room</option>
+                  <option value="Issued">Issued / Pending</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Movement Date</label>
+                <input 
+                  type="date"
+                  className="input-field"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  style={{ fontSize: '12px', padding: '6px 10px', height: '34px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+                <button 
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleClearFilters}
+                  style={{ flex: 1, padding: '0 8px', height: '34px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                  title="Clear all filters"
+                >
+                  Reset
+                </button>
+                <button 
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleExportCSV}
+                  style={{ flex: 1.3, padding: '0 8px', height: '34px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', background: 'linear-gradient(135deg, var(--primary), #059669)', color: 'white' }}
+                  title="Extract current list to CSV Excel"
+                >
+                  <Download size={13} /> Export
+                </button>
+              </div>
+
             </div>
 
             {/* Sub-Tab Controls (Searches) */}

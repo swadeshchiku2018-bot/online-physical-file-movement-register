@@ -52,7 +52,14 @@ function App() {
   // Auth states
   const [sessionUser, setSessionUser] = useState<UserSession | null>(() => {
     const saved = localStorage.getItem('gov_file_register_session');
-    return saved ? JSON.parse(saved) : null;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.isAdmin && (parsed.name === 'Administrator' || parsed.name === 'Manoj Kumar Jena')) {
+        parsed.name = 'Manoj Kumar Jena';
+      }
+      return parsed;
+    }
+    return null;
   });
   const [loginRole, setLoginRole] = useState<'admin' | 'official'>('admin');
   const [loginId, setLoginId] = useState<string>('');
@@ -110,13 +117,13 @@ function App() {
       if (loginId.trim().toLowerCase() === storedAdminId.toLowerCase() && loginPassword === storedAdminPass) {
         const adminSession: UserSession = {
           id: 'Admin',
-          name: 'Administrator',
+          name: 'Manoj Kumar Jena',
           designation: 'Record Room Head',
           isAdmin: true
         };
         setSessionUser(adminSession);
         localStorage.setItem('gov_file_register_session', JSON.stringify(adminSession));
-        triggerToast('Welcome Back, Administrator');
+        triggerToast('Welcome Back, Manoj Kumar Jena');
         setLoginId('');
         setLoginPassword('');
       } else {
@@ -283,8 +290,8 @@ function App() {
         <div className="sidebar-brand">
           <div className="brand-icon">F</div>
           <div className="brand-text">
-            <h1>National Register</h1>
-            <p>Physical File Movement</p>
+            <h1>Digital File Movement Register</h1>
+            <p>Powered by Swadesh</p>
           </div>
           <button className="sidebar-close-btn" onClick={() => setSidebarOpen(false)} title="Close Menu">
             <X size={18} />
@@ -307,7 +314,7 @@ function App() {
                 onClick={() => { setActiveTab('registers'); setSidebarOpen(false); }}
               >
                 <FileText size={18} />
-                Master Registers
+                Master Ledger
               </button>
               
               <button 
@@ -420,7 +427,7 @@ function App() {
             </button>
 
             <span className={`badge-role ${sessionUser.isAdmin ? 'admin' : 'recipient'}`}>
-              {sessionUser.isAdmin ? 'Admin Portal' : 'Recipient Portal'}
+              Welcome, {sessionUser.name}
             </span>
             
             <div className="system-time" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
