@@ -26,7 +26,11 @@ import {
   Send,
   CornerUpLeft,
   Lock,
-  User
+  User,
+  Settings,
+  Building,
+  CheckCircle,
+  HelpCircle
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -37,6 +41,8 @@ interface AdminDashboardProps {
   refreshData: () => void;
   activeTab: string;
   setActiveTab: (tab: any) => void;
+  orgName: string;
+  setOrgName: (name: string) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -46,7 +52,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   movementsList,
   refreshData,
   activeTab,
-  setActiveTab
+  setActiveTab,
+  orgName,
+  setOrgName
 }) => {
   // Local register sub-tab (Catalog, History, Recipients)
   const [registerSubTab, setRegisterSubTab] = useState<'files' | 'history' | 'recipients'>('files');
@@ -62,6 +70,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [recipientLoginId, setRecipientLoginId] = useState<string>('');
   const [recipientPassword, setRecipientPassword] = useState<string>('');
 
+  // Preference Settings state
+  const [adminLoginId, setAdminLoginId] = useState<string>(() => localStorage.getItem('gov_file_register_admin_id') || 'admin');
+  const [adminPassword, setAdminPassword] = useState<string>(() => localStorage.getItem('gov_file_register_admin_pass') || 'admin');
+  const [adminConfirmPassword, setAdminConfirmPassword] = useState<string>('');
+  const [prefOrgName, setPrefOrgName] = useState<string>(orgName);
+
+  // Sync preference Org Name when the prop changes
+  useEffect(() => {
+    setPrefOrgName(orgName);
+  }, [orgName]);
+
+  // Issue File Tab States
+  const [issueMode, setIssueMode] = useState<'search' | 'create'>('search');
+  const [issueFileSearchQuery, setIssueFileSearchQuery] = useState<string>('');
+  const [selectedExistingFile, setSelectedExistingFile] = useState<FileItem | null>(null);
+  
+  // Issue File: New file creation states
+  const [newFileId, setNewFileId] = useState<string>('');
+  const [newFileSubject, setNewFileSubject] = useState<string>('');
+  const [newFileDepartment, setNewFileDepartment] = useState<string>('');
+
+  // Issue File: Recipient states
+  const [issueRecipientName, setIssueRecipientName] = useState<string>('');
+  const [issueRecipientDesignation, setIssueRecipientDesignation] = useState<string>('');
+  const [issueReasonText, setIssueReasonText] = useState<string>('');
+  const [issueAnticipatedDeadline, setIssueAnticipatedDeadline] = useState<string>('');
+  const [issueSpecificRemarks, setIssueSpecificRemarks] = useState<string>('');
+
   // Search & Filter states
   const [fileSearch, setFileSearch] = useState<string>('');
   const [historySearch, setHistorySearch] = useState<string>('');
@@ -71,7 +107,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [qrModalFile, setQrModalFile] = useState<FileItem | null>(null);
   const [qrModalCodeUrl, setQrModalCodeUrl] = useState<string>('');
 
-  // Issue File Modal state
+  // Issue File Modal state (from registers catalog table click)
   const [issueModalFile, setIssueModalFile] = useState<FileItem | null>(null);
   const [issueName, setIssueName] = useState<string>('');
   const [issueDesignation, setIssueDesignation] = useState<string>('');
@@ -152,6 +188,114 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setActiveTab('registers'); // Redirect to list
     } catch (err: any) {
       onActionComplete(err.message || 'Error creating recipient.', true);
+    }
+  };
+
+  // Save Preferences settings
+  const handleSavePreferences = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminLoginId.trim() || !prefOrgName.trim()) {
+      onActionComplete('Admin ID and Organisation Name cannot be blank.', true);
+      return;
+    }
+
+    if (adminPassword && adminPassword !== adminConfirmPassword) {
+      onActionComplete('Passwords do not match.', true);
+      return;
+    }
+
+    localStorage.setItem('gov_file_register_admin_id', adminLoginId.trim());
+    if (adminPassword) {
+      localStorage.setItem('gov_file_register_admin_pass', adminPassword);
+    }
+    localStorage.setItem('gov_file_register_org_name', prefOrgName.trim());
+    setOrgName(prefOrgName.trim());
+    setAdminConfirmPassword('');
+    onActionComplete('Preferences updated successfully!');
+  };
+
+  // Handle issue file tab action (dynamic search or create)
+  const handleIssueFileTabSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    let targetFileId = '';
+
+    if (issueMode === 'create') {
+      if (!newFileId.trim() || !newFileSubject.trim() || !newFileDepartment.trim()) {
+        onActionComplete('Please fill in all fields to register the new file.', true);
+        return;
+      }
+      if (filesList.some(f => f.id.toLowerCase() === newFileId.trim().toLowerCase())) {
+        onActionComplete(`File ID "${newFileId.trim()}" already exists in the catalog.`, true);
+        return;
+      }
+      
+      try {
+        createFile(newFileId.trim(), newFileSubject.trim(), newFileDepartment.trim());
+        targetFileId = newFileId.trim();
+      } catch (err: any) {
+        onActionComplete(err.message || 'Error creating file.', true);
+        return;
+      }
+    } else {
+      if (!selectedExistingFile) {
+        onActionComplete('Please search and select an active file to issue.', true);
+        return;
+      }
+      if (selectedExistingFile.status === 'Issued') {
+        onActionComplete(`File "${selectedExistingFile.id}" is already issued. Recall it first.`, true);
+        return;
+      }
+      targetFileId = selectedExistingFile.id;
+    }
+
+    if (!issueRecipientName.trim() || !issueRecipientDesignation.trim() || !issueReasonText.trim() || !issueAnticipatedDeadline) {
+      onActionComplete('Recipient Name, Designation, Reason, and return date are required.', true);
+      return;
+    }
+
+    try {
+      // Find or create recipient profile
+      const existingRec = recipientsList.find(r => 
+        r.name.toLowerCase() === issueRecipientName.trim().toLowerCase() && 
+        r.designation.toLowerCase() === issueRecipientDesignation.trim().toLowerCase()
+      );
+      
+      let finalReceiverId = '';
+      if (existingRec) {
+        finalReceiverId = existingRec.id;
+      } else {
+        const newRec = addRecipient(issueRecipientName.trim(), issueRecipientDesignation.trim(), false);
+        finalReceiverId = newRec.id;
+      }
+
+      issueFile(
+        targetFileId, 
+        finalReceiverId, 
+        issueSpecificRemarks.trim() || `Issued via Issue File tab. Reason: ${issueReasonText.trim()}`, 
+        issueReasonText.trim(), 
+        new Date(issueAnticipatedDeadline).toISOString()
+      );
+
+      refreshData();
+      onActionComplete(`File "${targetFileId}" issued successfully to ${issueRecipientName.trim()}`);
+      
+      // Reset states
+      setIssueMode('search');
+      setIssueFileSearchQuery('');
+      setSelectedExistingFile(null);
+      setNewFileId('');
+      setNewFileSubject('');
+      setNewFileDepartment('');
+      setIssueRecipientName('');
+      setIssueRecipientDesignation('');
+      setIssueReasonText('');
+      setIssueAnticipatedDeadline('');
+      setIssueSpecificRemarks('');
+      
+      setActiveTab('registers'); // Redirect to registers
+    } catch (err: any) {
+      onActionComplete(err.message || 'Error issuing file.', true);
     }
   };
 
@@ -262,6 +406,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const matchesFilter = historyFilterType === 'ALL' || m.type.toUpperCase() === historyFilterType;
     return matchesSearch && matchesFilter;
   });
+
+  // Filter issue files search results
+  const filteredIssueFilesSearch = filesList.filter(f => 
+    f.status === 'Returned' && 
+    (f.id.toLowerCase().includes(issueFileSearchQuery.toLowerCase()) ||
+     f.subject.toLowerCase().includes(issueFileSearchQuery.toLowerCase()))
+  );
 
   // Pending files list
   const pendingFiles = filesList.filter(f => f.status === 'Issued');
@@ -686,7 +837,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
-      {/* Tab 4: ENROLL OFFICIAL FORM (with custom ID/Password fields) */}
+      {/* Tab 4: ENROLL OFFICIAL FORM */}
       {activeTab === 'enroll_recipient' && (
         <div style={{ maxWidth: '650px', margin: '0 auto', width: '100%' }}>
           <div className="glass-panel" style={{ padding: '30px' }}>
@@ -712,7 +863,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <input 
                     type="text" 
                     className="input-field" 
-                    placeholder="e.g. Section Officer (Admin)" 
+                    placeholder="e.g. Post Officer" 
                     value={recipientDesignation}
                     onChange={(e) => setRecipientDesignation(e.target.value)}
                     required
@@ -830,6 +981,332 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 );
               })
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab 6: ISSUE FILE VIEW (Dynamic Search existing OR create new-on-the-fly) */}
+      {activeTab === 'issue_file' && (
+        <div style={{ maxWidth: '750px', margin: '0 auto', width: '100%' }}>
+          <div className="glass-panel" style={{ padding: '30px' }}>
+            <div className="card-header" style={{ padding: '0 0 20px 0', borderBottom: '1px solid var(--border-color)', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3><Send size={20} className="text-gold" /> Issue File to Official</h3>
+              <div className="login-tabs" style={{ margin: 0, padding: '2px' }}>
+                <button 
+                  type="button" 
+                  className={`login-tab ${issueMode === 'search' ? 'active' : ''}`}
+                  onClick={() => { setIssueMode('search'); setSelectedExistingFile(null); }}
+                  style={{ padding: '6px 12px', fontSize: '12px' }}
+                >
+                  🔍 Select Existing File
+                </button>
+                <button 
+                  type="button" 
+                  className={`login-tab ${issueMode === 'create' ? 'active' : ''}`}
+                  onClick={() => { setIssueMode('create'); setSelectedExistingFile(null); }}
+                  style={{ padding: '6px 12px', fontSize: '12px' }}
+                >
+                  🆕 Create & Issue File
+                </button>
+              </div>
+            </div>
+
+            <div className="card-body" style={{ padding: 0 }}>
+              <form onSubmit={handleIssueFileTabSubmit}>
+                
+                {/* File Selection Module */}
+                {issueMode === 'search' ? (
+                  <div style={{ padding: '16px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '24px' }}>
+                    <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '10px' }}>
+                      Step 1: Select Active Register File
+                    </h4>
+                    
+                    <div style={{ position: 'relative', marginBottom: '12px' }}>
+                      <Search size={16} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="Search returned files by ID or Subject..." 
+                        value={issueFileSearchQuery}
+                        onChange={(e) => setIssueFileSearchQuery(e.target.value)}
+                        style={{ paddingLeft: '38px', fontSize: '13px' }}
+                      />
+                    </div>
+
+                    {/* Search suggestions dropdown list */}
+                    {issueFileSearchQuery.trim().length > 0 && !selectedExistingFile && (
+                      <div style={{ background: '#0e1423', border: '1px solid var(--border-color)', borderRadius: '6px', maxHeight: '160px', overflowY: 'auto', marginBottom: '14px' }}>
+                        {filteredIssueFilesSearch.map(f => (
+                          <div 
+                            key={f.id} 
+                            onClick={() => { setSelectedExistingFile(f); setIssueFileSearchQuery(''); }}
+                            style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}
+                            className="overdue-row"
+                          >
+                            <span style={{ fontWeight: 600, color: 'var(--accent-gold)' }}>{f.id}</span>
+                            <span style={{ color: 'var(--text-main)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '300px' }}>{f.subject}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>{f.department}</span>
+                          </div>
+                        ))}
+                        {filteredIssueFilesSearch.length === 0 && (
+                          <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                            No returned files found matching search query.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {selectedExistingFile ? (
+                      <div style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, color: 'var(--accent-gold)', fontSize: '13px' }}>Selected: {selectedExistingFile.id}</div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-main)', marginTop: '2px' }}>{selectedExistingFile.subject}</div>
+                        </div>
+                        <button type="button" className="btn btn-secondary" onClick={() => setSelectedExistingFile(null)} style={{ width: 'auto', padding: '4px 8px', fontSize: '11px' }}>
+                          Clear
+                        </button>
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: '12px', color: 'var(--accent-gold)' }}>⚠️ Please search and click a file above to select it.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ padding: '16px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '24px' }}>
+                    <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '14px' }}>
+                      Step 1: Register New File on-the-fly
+                    </h4>
+                    
+                    <div className="form-group">
+                      <label>New File ID</label>
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="e.g. GOV-2026-F50" 
+                        value={newFileId}
+                        onChange={(e) => setNewFileId(e.target.value)}
+                        style={{ fontSize: '13px', padding: '10px 14px' }}
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label>File Subject Title</label>
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="e.g. IT Procurement checklist" 
+                        value={newFileSubject}
+                        onChange={(e) => setNewFileSubject(e.target.value)}
+                        style={{ fontSize: '13px', padding: '10px 14px' }}
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Department Section</label>
+                      <select 
+                        className="input-field select-field"
+                        value={newFileDepartment}
+                        onChange={(e) => setNewFileDepartment(e.target.value)}
+                        style={{ fontSize: '13px', padding: '10px 14px' }}
+                      >
+                        <option value="">-- Choose Section --</option>
+                        <option value="Establishment Section">Establishment Section</option>
+                        <option value="Finance & Accounts Branch">Finance & Accounts Branch</option>
+                        <option value="IT Infrastructure Division">IT Infrastructure Division</option>
+                        <option value="General Administration Division">General Administration Division</option>
+                        <option value="Policy & Coordination Unit">Policy & Coordination Unit</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Recipient Details Module */}
+                <div style={{ padding: '16px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '24px' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '10px' }}>
+                    Step 2: Custodian & Issue Specifics
+                  </h4>
+
+                  {/* Quick prefill list of registered officials */}
+                  <div style={{ marginBottom: '14px' }}>
+                    <label style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--accent-gold)', fontWeight: 600 }}>Quick Select Registered Official:</label>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                      {recipientsList.filter(r => r.isRegistered).map(r => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          className="sim-file-btn"
+                          onClick={() => {
+                            setIssueRecipientName(r.name);
+                            setIssueRecipientDesignation(r.designation);
+                          }}
+                          style={{ fontSize: '11px', padding: '4px 8px' }}
+                        >
+                          👤 {r.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Official Name</label>
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="e.g. Priya Patel" 
+                      value={issueRecipientName}
+                      onChange={(e) => setIssueRecipientName(e.target.value)}
+                      required
+                      style={{ fontSize: '13px', padding: '10px 14px' }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Designation / Post</label>
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="e.g. Section Officer" 
+                      value={issueRecipientDesignation}
+                      onChange={(e) => setIssueRecipientDesignation(e.target.value)}
+                      required
+                      style={{ fontSize: '13px', padding: '10px 14px' }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Reason for taking File</label>
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="e.g. FY 2026 Audit checklist review" 
+                      value={issueReasonText}
+                      onChange={(e) => setIssueReasonText(e.target.value)}
+                      required
+                      style={{ fontSize: '13px', padding: '10px 14px' }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Anticipated Return Deadline</label>
+                    <input 
+                      type="datetime-local" 
+                      className="input-field" 
+                      value={issueAnticipatedDeadline}
+                      onChange={(e) => setIssueAnticipatedDeadline(e.target.value)}
+                      required
+                      style={{ fontSize: '13px', padding: '10px 14px' }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Additional Movement Remarks (Optional)</label>
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="Add supplementary remarks" 
+                      value={issueSpecificRemarks}
+                      onChange={(e) => setIssueSpecificRemarks(e.target.value)}
+                      style={{ fontSize: '13px', padding: '10px 14px' }}
+                    />
+                  </div>
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+                  <Send size={16} /> Confirm Registration & Issue Physical File
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 7: PREFERENCE SETTINGS VIEW */}
+      {activeTab === 'settings' && (
+        <div style={{ maxWidth: '650px', margin: '0 auto', width: '100%' }}>
+          <div className="glass-panel" style={{ padding: '30px' }}>
+            <div className="card-header" style={{ padding: '0 0 20px 0', borderBottom: '1px solid var(--border-color)', marginBottom: '20px' }}>
+              <h3><Settings size={20} className="text-gold" /> System Preference Settings</h3>
+            </div>
+            
+            <div className="card-body" style={{ padding: 0 }}>
+              <form onSubmit={handleSavePreferences}>
+                
+                <div style={{ padding: '20px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '24px' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent-gold)', textTransform: 'uppercase', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Building size={14} /> Ministry / Organization Settings
+                  </h4>
+                  
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Display Organisation Name</label>
+                    <div style={{ position: 'relative' }}>
+                      <Building size={14} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        value={prefOrgName}
+                        onChange={(e) => setPrefOrgName(e.target.value)}
+                        required
+                        style={{ paddingLeft: '38px', fontSize: '13px' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ padding: '20px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '24px' }}>
+                  <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent-gold)', textTransform: 'uppercase', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Lock size={14} /> Administrator Portal Login Credentials
+                  </h4>
+                  
+                  <div className="form-group">
+                    <label>Admin User ID / Username</label>
+                    <div style={{ position: 'relative' }}>
+                      <User size={14} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        value={adminLoginId}
+                        onChange={(e) => setAdminLoginId(e.target.value)}
+                        required
+                        style={{ paddingLeft: '38px', fontSize: '13px', textTransform: 'none' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>New Admin Password</label>
+                    <div style={{ position: 'relative' }}>
+                      <Lock size={14} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
+                      <input 
+                        type="password" 
+                        className="input-field" 
+                        placeholder="Leave blank to keep existing password" 
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        style={{ paddingLeft: '38px', fontSize: '13px' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Confirm Admin Password</label>
+                    <div style={{ position: 'relative' }}>
+                      <Lock size={14} style={{ position: 'absolute', left: '12px', top: '14px', color: 'var(--text-muted)' }} />
+                      <input 
+                        type="password" 
+                        className="input-field" 
+                        placeholder="Confirm new password" 
+                        value={adminConfirmPassword}
+                        onChange={(e) => setAdminConfirmPassword(e.target.value)}
+                        style={{ paddingLeft: '38px', fontSize: '13px' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+                  Save Configuration Preferences
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       )}

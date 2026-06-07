@@ -24,7 +24,9 @@ import {
   X,
   FileText,
   PlusCircle,
-  UserPlus
+  UserPlus,
+  Settings,
+  Send
 } from 'lucide-react';
 import './App.css';
 
@@ -42,7 +44,8 @@ interface ToastMessage {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'registers' | 'register_file' | 'enroll_recipient' | 'alerts' | 'scanner'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'registers' | 'register_file' | 'enroll_recipient' | 'alerts' | 'scanner' | 'settings' | 'issue_file'>('dashboard');
+  const [orgName, setOrgName] = useState<string>(() => localStorage.getItem('gov_file_register_org_name') || 'Govt of India • Ministry of Electronics & IT');
   
   // Auth states
   const [sessionUser, setSessionUser] = useState<UserSession | null>(() => {
@@ -100,7 +103,9 @@ function App() {
     }
 
     if (loginRole === 'admin') {
-      if (loginId.trim().toLowerCase() === 'admin' && loginPassword === 'admin') {
+      const storedAdminId = localStorage.getItem('gov_file_register_admin_id') || 'admin';
+      const storedAdminPass = localStorage.getItem('gov_file_register_admin_pass') || 'admin';
+      if (loginId.trim().toLowerCase() === storedAdminId.toLowerCase() && loginPassword === storedAdminPass) {
         const adminSession: UserSession = {
           id: 'Admin',
           name: 'Administrator',
@@ -113,7 +118,7 @@ function App() {
         setLoginId('');
         setLoginPassword('');
       } else {
-        triggerToast('Invalid Admin credentials. (Hint: admin / admin)', true);
+        triggerToast(`Invalid Admin credentials. (Hint: ${storedAdminId} / ${storedAdminPass})`, true);
       }
     } else {
       // Official login search
@@ -201,7 +206,7 @@ function App() {
                 <ShieldAlert size={14} /> Quick-Start Credentials
               </h4>
               {loginRole === 'admin' ? (
-                <p>Use Login ID: <strong>admin</strong> and Password: <strong>admin</strong> to access the admin register room dashboard.</p>
+                <p>Use Login ID: <strong style={{ textTransform: 'none' }}>{localStorage.getItem('gov_file_register_admin_id') || 'admin'}</strong> and Password: <strong>{localStorage.getItem('gov_file_register_admin_pass') || 'admin'}</strong> to access the admin register room dashboard.</p>
               ) : (
                 <p>Use Login ID: <strong>priya</strong> or <strong>REC-001</strong> and Password: <strong>password</strong>. (Other officials: amit, rajesh, sunita).</p>
               )}
@@ -296,6 +301,14 @@ function App() {
               </button>
               
               <button 
+                className={`menu-item ${activeTab === 'issue_file' ? 'active' : ''}`}
+                onClick={() => setActiveTab('issue_file')}
+              >
+                <Send size={18} />
+                Issue File Tab
+              </button>
+              
+              <button 
                 className={`menu-item ${activeTab === 'register_file' ? 'active' : ''}`}
                 onClick={() => setActiveTab('register_file')}
               >
@@ -317,6 +330,14 @@ function App() {
               >
                 <ShieldAlert size={18} />
                 Custody Alerts
+              </button>
+
+              <button 
+                className={`menu-item ${activeTab === 'settings' ? 'active' : ''}`}
+                onClick={() => setActiveTab('settings')}
+              >
+                <Settings size={18} />
+                Preference Settings
               </button>
               
               <button 
@@ -373,7 +394,7 @@ function App() {
         <header className="main-header">
           <div className="header-title">
             <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Building size={12} /> Govt of India • Ministry of Electronics & IT
+              <Building size={12} /> {orgName}
             </span>
             <h2>Physical File Movement Register</h2>
           </div>
@@ -414,6 +435,8 @@ function App() {
               refreshData={refreshData}
               activeTab={activeTab}
               setActiveTab={setActiveTab}
+              orgName={orgName}
+              setOrgName={setOrgName}
             />
           )
         ) : (
