@@ -1,9 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { kv } from '@vercel/kv';
-
-const RECIPIENTS_KEY = 'gov_file_register_recipients';
-const FILES_KEY = 'gov_file_register_files';
-const MOVEMENTS_KEY = 'gov_file_register_movements';
+import { getPool, initTables } from './db';
 
 const DEFAULT_RECIPIENTS = [
   { id: 'REC-001', name: 'Priya Patel', designation: 'Section Officer', isRegistered: true, loginId: 'priya', password: 'password' },
@@ -124,27 +120,93 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    let recipients = await kv.get(RECIPIENTS_KEY);
-    if (!recipients) {
-      recipients = DEFAULT_RECIPIENTS;
-      await kv.set(RECIPIENTS_KEY, DEFAULT_RECIPIENTS);
+    // 1. Ensure tables exist
+    await initTables();
+    const pool = getPool();
+
+    // 2. Check if recipients table is empty (which indicates seeding is required)
+    const countRes = await pool.query('SELECT COUNT(*)::int as count FROM recipients');
+    if (countRes.rows[0].count === 0) {
+      console.log("Seeding default data in PostgreSQL database...");
+      await pool.query('BEGIN');
+      try {
+        for (const r of DEFAULT_RECIPIENTS) {
+          await pool.query(
+            `INSERT INTO recipients (id, name, designation, is_registered, login_id, password)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [r.id, r.name, r.designation, r.isRegistered, r.loginId, r.password]
+          );
+        }
+        for (const f of DEFAULT_FILES) {
+          await pool.query(
+            `INSERT INTO files (id, subject, department, current_holder_id, status, created_date, last_moved_date, reason, anticipated_return_date)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [f.id, f.subject, f.department, f.currentHolderId, f.status, f.createdDate, f.lastMovedDate, f.reason, f.anticipatedReturnDate]
+          );
+        }
+        for (const m of DEFAULT_MOVEMENTS) {
+          await pool.query(
+            `INSERT INTO movements (id, file_id, file_subject, sender_id, sender_name, receiver_id, receiver_name, timestamp, remarks, type, reason, anticipated_return_date)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+            [m.id, m.fileId, m.fileSubject, m.senderId, m.senderName, m.receiverId, m.receiverName, m.timestamp, m.remarks, m.type, m.reason, m.anticipatedReturnDate]
+          );
+        }
+        await pool.query('COMMIT');
+      } catch (err) {
+        await pool.query('ROLLBACK');
+        throw err;
+      }
     }
 
-    let files = await kv.get(FILES_KEY);
-    if (!files) {
-      files = DEFAULT_FILES;
-      await kv.set(FILES_KEY, DEFAULT_FILES);
-    }
+    // 3. Fetch data from PostgreSQL
+    const recipientsRes = await pool.query('SELECT * FROM recipients');
+    const filesRes = await pool.query('SELECT * FROM files');
+    const movementsRes = await pool.query('SELECT * FROM movements');
 
-    let movements = await kv.get(MOVEMENTS_KEY);
-    if (!movements) {
-      movements = DEFAULT_MOVEMENTS;
-      await kv.set(MOVEMENTS_KEY, DEFAULT_MOVEMENTS);
-    }
+    // 4. Map columns back to JSON model types
+    const mappedRecipients = recipientsRes.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      designation: row.designation,
+      isRegistered: row.is_registered,
+      loginId: row.login_id || undefined,
+      password: row.password || undefined
+    }));
 
-    return res.status(200).json({ files, recipients, movements });
+    const mappedFiles = filesRes.rows.map(row => ({
+      id: row.id,
+      subject: row.subject,
+      department: row.department,
+      currentHolderId: row.current_holder_id,
+      status: row.status,
+      createdDate: row.created_date,
+      lastMovedDate: row.last_moved_date,
+      reason: row.reason || undefined,
+      anticipatedReturnDate: row.anticipated_return_date || undefined
+    }));
+
+    const mappedMovements = movementsRes.rows.map(row => ({
+      id: row.id,
+      fileId: row.file_id,
+      fileSubject: row.file_subject,
+      senderId: row.sender_id,
+      senderName: row.sender_name,
+      receiverId: row.receiver_id,
+      receiverName: row.receiver_name,
+      timestamp: row.timestamp,
+      remarks: row.remarks || '',
+      type: row.type,
+      reason: row.reason || undefined,
+      anticipatedReturnDate: row.anticipated_return_date || undefined
+    }));
+
+    return res.status(200).json({
+      files: mappedFiles,
+      recipients: mappedRecipients,
+      movements: mappedMovements
+    });
   } catch (error: any) {
-    console.error("KV get-data error:", error);
-    return res.status(500).json({ error: error.message || "Failed to load KV database" });
+    console.error("Postgres get-data error:", error);
+    return res.status(500).json({ error: error.message || "Failed to load PostgreSQL database" });
   }
 }

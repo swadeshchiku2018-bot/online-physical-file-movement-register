@@ -181,9 +181,9 @@ const saveRemoteData = async (payload: { files?: FileItem[], recipients?: Recipi
       body: JSON.stringify(payload)
     });
     if (!response.ok) throw new Error('Save API responded with error status');
-    console.log("Database sync with Vercel KV successful!");
+    console.log("Database sync with PostgreSQL successful!");
   } catch (error) {
-    console.warn("Could not sync with Vercel KV. Operating locally.", error);
+    console.warn("Could not sync with PostgreSQL. Operating locally.", error);
   }
 };
 
@@ -197,16 +197,118 @@ export const initDB = async (onSyncComplete?: () => void) => {
     
     const data = await response.json();
     
-    cachedFiles = data.files || [];
-    cachedRecipients = data.recipients || [];
-    cachedMovements = data.movements || [];
+    const dbFiles: FileItem[] = data.files || [];
+    const dbRecipients: Recipient[] = data.recipients || [];
+    const dbMovements: Movement[] = data.movements || [];
 
-    // Save back to local storage cache
+    // --- CONFLICT RESOLUTION & MERGE LOGIC ---
+    let diffDetected = false;
+
+    // 1. Merge Recipients
+    const mergedRecipientsMap = new Map<string, Recipient>();
+    if (cachedRecipients.length === 0) {
+      // Local storage empty: download all from DB
+      dbRecipients.forEach(r => mergedRecipientsMap.set(r.id, r));
+      if (dbRecipients.length > 0) {
+        diffDetected = true;
+      }
+    } else {
+      // Local storage not empty: use local storage as base
+      cachedRecipients.forEach(r => mergedRecipientsMap.set(r.id, r));
+      
+      // If a recipient exists in DB but not in local storage, it was deleted locally.
+      dbRecipients.forEach(dbRec => {
+        if (!mergedRecipientsMap.has(dbRec.id)) {
+          diffDetected = true; // Deleted locally, will delete from DB
+        } else {
+          // Exists in both: compare for updates
+          const localRec = mergedRecipientsMap.get(dbRec.id)!;
+          const hasDiff = 
+            dbRec.name !== localRec.name || 
+            dbRec.designation !== localRec.designation ||
+            dbRec.isRegistered !== localRec.isRegistered ||
+            dbRec.loginId !== localRec.loginId ||
+            dbRec.password !== localRec.password;
+          
+          if (hasDiff) {
+            mergedRecipientsMap.set(dbRec.id, localRec);
+            diffDetected = true;
+          }
+        }
+      });
+    }
+    const finalRecipients = Array.from(mergedRecipientsMap.values());
+
+    // 2. Merge Files (Last-Write-Wins based on lastMovedDate)
+    const mergedFilesMap = new Map<string, FileItem>();
+    if (cachedFiles.length === 0) {
+      dbFiles.forEach(f => mergedFilesMap.set(f.id, f));
+      if (dbFiles.length > 0) {
+        diffDetected = true;
+      }
+    } else {
+      cachedFiles.forEach(f => mergedFilesMap.set(f.id, f));
+      dbFiles.forEach(dbFile => {
+        const localFile = mergedFilesMap.get(dbFile.id);
+        if (!localFile) {
+          mergedFilesMap.set(dbFile.id, dbFile);
+          diffDetected = true;
+        } else {
+          const localTime = new Date(localFile.lastMovedDate).getTime();
+          const dbTime = new Date(dbFile.lastMovedDate).getTime();
+          if (localTime > dbTime) {
+            mergedFilesMap.set(dbFile.id, localFile);
+            diffDetected = true;
+          } else if (dbTime > localTime) {
+            mergedFilesMap.set(dbFile.id, dbFile);
+            diffDetected = true;
+          }
+        }
+      });
+    }
+    const finalFiles = Array.from(mergedFilesMap.values());
+
+    // 3. Merge Movements (Append-only, union by id)
+    const mergedMovementsMap = new Map<string, Movement>();
+    if (cachedMovements.length === 0) {
+      dbMovements.forEach(m => mergedMovementsMap.set(m.id, m));
+      if (dbMovements.length > 0) {
+        diffDetected = true;
+      }
+    } else {
+      cachedMovements.forEach(m => mergedMovementsMap.set(m.id, m));
+      dbMovements.forEach(dbMov => {
+        if (!mergedMovementsMap.has(dbMov.id)) {
+          mergedMovementsMap.set(dbMov.id, dbMov);
+          diffDetected = true;
+        }
+      });
+    }
+    const finalMovements = Array.from(mergedMovementsMap.values()).sort(
+      (a: Movement, b: Movement) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+
+    // Apply merged results to local cache
+    cachedFiles = finalFiles;
+    cachedRecipients = finalRecipients;
+    cachedMovements = finalMovements;
+
+    // Save to localStorage cache
     localStorage.setItem(FILES_KEY, JSON.stringify(cachedFiles));
     localStorage.setItem(RECIPIENTS_KEY, JSON.stringify(cachedRecipients));
     localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(cachedMovements));
 
-    console.log("Synced remote database with Vercel KV");
+    // If local storage has records that are not in PostgreSQL, sync it
+    if (diffDetected) {
+      console.log("Local changes or conflicts resolved. Syncing merged data back to PostgreSQL...");
+      await saveRemoteData({
+        files: cachedFiles,
+        recipients: cachedRecipients,
+        movements: cachedMovements
+      });
+    }
+
+    console.log("Synced remote database with PostgreSQL");
     if (onSyncComplete) onSyncComplete();
   } catch (err) {
     console.warn("Using offline localStorage fallback", err);
