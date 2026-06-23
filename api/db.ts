@@ -2,8 +2,7 @@ import { Pool } from 'pg';
 
 const connectionString = 
   process.env.STORAGE02_POSTGRES_URL || 
-  process.env.STORAGE02_DATABASE_URL || 
-  "postgres://e7d27f95312ee2f90689be8bda69a6a47d9c4eeca595701c01d93daff5027f4f:sk_oFmYPBxQ5ECetSQEWBF6_@db.prisma.io:5432/postgres?sslmode=require";
+  process.env.STORAGE02_DATABASE_URL;
 
 let pool: Pool | null = null;
 
