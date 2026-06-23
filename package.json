@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "dev:api": "node --env-file=.env server.js",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
@@ -11,6 +12,9 @@
   },
   "dependencies": {
     "@vercel/kv": "^3.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^1.17.0",
     "pg": "^8.22.0",

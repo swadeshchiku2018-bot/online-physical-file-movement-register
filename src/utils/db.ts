@@ -206,33 +206,57 @@ export const initDB = async (onSyncComplete?: () => void) => {
 
     // 1. Merge Recipients
     const mergedRecipientsMap = new Map<string, Recipient>();
-    if (cachedRecipients.length === 0) {
+
+    // Normalize DB Recipients to ensure loginId and password exist
+    const normalizedDbRecipients = dbRecipients.map(r => ({
+      ...r,
+      loginId: r.loginId || r.name.toLowerCase().replace(/\s+/g, ''),
+      password: r.password || 'password'
+    }));
+
+    // Normalize Cached Recipients
+    const normalizedCachedRecipients = cachedRecipients.map(r => ({
+      ...r,
+      loginId: r.loginId || r.name.toLowerCase().replace(/\s+/g, ''),
+      password: r.password || 'password'
+    }));
+
+    if (normalizedCachedRecipients.length === 0) {
       // Local storage empty: download all from DB
-      dbRecipients.forEach(r => mergedRecipientsMap.set(r.id, r));
-      if (dbRecipients.length > 0) {
+      normalizedDbRecipients.forEach(r => mergedRecipientsMap.set(r.id, r));
+      if (normalizedDbRecipients.length > 0) {
         diffDetected = true;
       }
     } else {
       // Local storage not empty: use local storage as base
-      cachedRecipients.forEach(r => mergedRecipientsMap.set(r.id, r));
+      normalizedCachedRecipients.forEach(r => mergedRecipientsMap.set(r.id, r));
       
       // If a recipient exists in DB but not in local storage, it was deleted locally.
-      dbRecipients.forEach(dbRec => {
+      normalizedDbRecipients.forEach(dbRec => {
         if (!mergedRecipientsMap.has(dbRec.id)) {
           diffDetected = true; // Deleted locally, will delete from DB
         } else {
           // Exists in both: compare for updates
           const localRec = mergedRecipientsMap.get(dbRec.id)!;
+          
+          // Intelligently merge properties (favor local edits, but preserve DB values if local is somehow empty)
+          const mergedRec = { ...localRec };
+          if (!mergedRec.loginId) mergedRec.loginId = dbRec.loginId;
+          if (!mergedRec.password) mergedRec.password = dbRec.password;
+
           const hasDiff = 
-            dbRec.name !== localRec.name || 
-            dbRec.designation !== localRec.designation ||
-            dbRec.isRegistered !== localRec.isRegistered ||
-            dbRec.loginId !== localRec.loginId ||
-            dbRec.password !== localRec.password;
+            dbRec.name !== mergedRec.name || 
+            dbRec.designation !== mergedRec.designation ||
+            dbRec.isRegistered !== mergedRec.isRegistered ||
+            dbRec.loginId !== mergedRec.loginId ||
+            dbRec.password !== mergedRec.password;
           
           if (hasDiff) {
-            mergedRecipientsMap.set(dbRec.id, localRec);
+            mergedRecipientsMap.set(dbRec.id, mergedRec);
             diffDetected = true;
+          } else {
+            // Keep DB version (prevents unnecessary sync if exactly identical)
+            mergedRecipientsMap.set(dbRec.id, dbRec);
           }
         }
       });
